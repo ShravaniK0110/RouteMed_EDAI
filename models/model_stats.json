@@ -1,0 +1,15 @@
+{
+  "demand": {
+    "precision": 0.6259625962596259,
+    "recall": 0.060454738631534215,
+    "f1_score": 0.11026063365952911,
+    "samples": 59998,
+    "trained_on": "AccidentsBig.csv + CasualtiesBig.csv (59,998 Kaggle records)"
+  },
+  "traffic": {
+    "r2_score": 0.06707418626645234,
+    "mae": 0.46277755745481197,
+    "samples": 59998,
+    "trained_on": "AccidentsBig.csv + CasualtiesBig.csv (59,998 Kaggle records)"
+  }
+}
