@@ -39,16 +39,16 @@ export default function PatientTrackingPage({ params }: { params: { requestId: s
       if (ride.paramedic_id) {
         const { data: paramedic } = await supabase
           .from('paramedics')
-          .select('lat, lng, full_name')
+          .select('current_lat, current_lng, full_name')
           .eq('id', ride.paramedic_id)
           .single();
 
         if (paramedic) {
           if (paramedic.full_name) setParamedicName(paramedic.full_name);
-          if (paramedic.lat && paramedic.lng) {
+          if (paramedic.current_lat && paramedic.current_lng) {
             setParamedicLoc({
-              lat: Number(paramedic.lat),
-              lng: Number(paramedic.lng),
+              lat: Number(paramedic.current_lat),
+              lng: Number(paramedic.current_lng),
             });
           }
         }
@@ -73,10 +73,10 @@ export default function PatientTrackingPage({ params }: { params: { requestId: s
           filter: `id=eq.${paramedicId}`,
         },
         (payload) => {
-          if (payload.new?.lat && payload.new?.lng) {
+          if (payload.new?.current_lat && payload.new?.current_lng) {
             setParamedicLoc({
-              lat: Number(payload.new.lat),
-              lng: Number(payload.new.lng),
+              lat: Number(payload.new.current_lat),
+              lng: Number(payload.new.current_lng),
             });
           }
         }

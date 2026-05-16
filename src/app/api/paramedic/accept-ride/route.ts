@@ -26,7 +26,7 @@ export async function POST(req: Request) {
     // 2. Fetch paramedic's current GPS location
     const { data: paramedic, error: paramedicError } = await supabase
       .from('paramedics')
-      .select('lat, lng')
+      .select('current_lat, current_lng')
       .eq('id', paramedic_id)
       .single();
 
@@ -36,10 +36,10 @@ export async function POST(req: Request) {
 
     // 3. Calculate real distance and fare
     // If paramedic GPS hasn't fired yet, fall back to a minimum 2km estimate
-    const distanceKm = (paramedic.lat && paramedic.lng)
+    const distanceKm = (paramedic.current_lat && paramedic.current_lng)
       ? getDistanceKm(
-          paramedic.lat,
-          paramedic.lng,
+          paramedic.current_lat,
+          paramedic.current_lng,
           ride.pickup_lat,
           ride.pickup_lng
         )
@@ -59,20 +59,23 @@ export async function POST(req: Request) {
     );
 
     // 4. Update ride — status, paramedic, timestamp, and calculated fare
-    const { error: updateError } = await supabase
+    const { data: updatedRide, error: updateError } = await supabase
       .from('rides')
       .update({
         status: 'accepted',
         paramedic_id: paramedic_id,
         accepted_at: new Date().toISOString(),
-        total_fare: Math.round(totalFare),   // rounded to nearest rupee
+        total_fare: Math.round(totalFare),
         distance_km: parseFloat(distanceKm.toFixed(2)),
       })
-      .eq('id', request_id);
+      .eq('id', request_id)
+      .eq('status', 'searching')
+      .select()
+      .single();
 
-    if (updateError) {
-      console.error('Acceptance DB Error:', updateError.message);
-      return NextResponse.json({ error: 'Database update failed' }, { status: 500 });
+    if (updateError || !updatedRide) {
+      console.error('Acceptance DB Error:', updateError?.message);
+      return NextResponse.json({ error: 'Ride no longer available' }, { status: 409 });
     }
 
     // 5. Mark paramedic as busy (offline) so smart-match won't re-assign them

@@ -1,8 +1,8 @@
 // Define the Paramedic type — matches the actual Supabase paramedics table columns
 export interface Paramedic {
   id: string;
-  lat: number | null;
-  lng: number | null;
+  current_lat: number | null;
+  current_lng: number | null;
   average_rating?: number | null;
   vehicle_registration?: string;
 }

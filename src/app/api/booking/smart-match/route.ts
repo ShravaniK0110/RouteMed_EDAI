@@ -26,8 +26,8 @@ export async function POST(req: Request) {
     const scored = paramedics.map(p => ({
       ...p,
       // If lat/lng are NULL, we use 999km as a fallback to ensure they are still "matchable"
-      dist: (p.lat && p.lng)
-        ? getDistanceKm(ride.pickup_lat, ride.pickup_lng, p.lat, p.lng)
+      dist: (p.current_lat && p.current_lng)
+        ? getDistanceKm(ride.pickup_lat, ride.pickup_lng, p.current_lat, p.current_lng)
         : 999
     })).sort((a, b) => a.dist - b.dist);
 

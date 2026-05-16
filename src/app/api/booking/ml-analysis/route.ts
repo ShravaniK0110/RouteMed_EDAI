@@ -28,16 +28,16 @@ export async function POST(req: NextRequest) {
       `Final Score: ${((best.totalScore ?? 0) * 100).toFixed(1)} / 100`,
     ]
 
-    const equipmentList: string[] = best.equipment
-      ? JSON.parse(best.equipment)
+    const equipmentList: string[] = Array.isArray(best.equipment)
+      ? best.equipment
       : []
 
     return NextResponse.json({
       selectedHospital: {
         id: best.id,
         name: best.name,
-        lat: best.latitude,
-        lng: best.longitude,
+        lat: best.lat,
+        lng: best.lng,
         beds: best.availableBeds,
         equipment: equipmentList,
         distance: parseFloat((best.travelTime ?? 0).toFixed(1)),

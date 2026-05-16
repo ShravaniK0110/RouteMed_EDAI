@@ -76,7 +76,7 @@ export async function selectOptimalHospital(
 
   for (const h of hospitals) {
     // Note: using h.lat/h.lng from our new Supabase schema
-    const distKm = getDistanceKm(patientLoc.lat, patientLoc.lng, Number(h.lat), Number(h.lng));
+    const distKm = getDistanceKm(patientLoc.lat, patientLoc.lng, Number(h.latitude), Number(h.longitude));
     const travelTime = await getTravelTimeMinutes(distKm, hour, dayOfWeek);
 
     // Factor 1: Travel Time (40%)
@@ -89,7 +89,7 @@ export async function selectOptimalHospital(
     }
 
     // Factor 3: Quality (20%)
-    const qualityScore = ((h.quality_rating ?? 4.0) / 5) * 0.2;
+    const qualityScore = ((h.rating ?? 4.0) / 5) * 0.2;
 
     // Factor 4: Response Time (10%)
     const responseScore = Math.max(0, (20 - travelTime) / 20) * 0.1;
@@ -103,7 +103,7 @@ export async function selectOptimalHospital(
 
     if (type.includes('chest') || type.includes('cardiac') || type.includes('arrest')) {
       specialtyMultiplier = (equipmentList.includes('cardiologist') || equipmentList.includes('cath lab')) ? 1.3 : 1.0;
-    } else if (severity === 'Critical' && !h.quality_rating) { // Quality as proxy for ICU
+    } else if (severity === 'Critical' && !h.rating) { // Quality as proxy for ICU
       specialtyMultiplier = 0.7;
     }
 

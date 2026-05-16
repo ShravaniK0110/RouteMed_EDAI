@@ -37,8 +37,8 @@ export default function ParamedicHome() {
           const { error } = await supabase
             .from('paramedics')
             .update({ 
-              lat: latitude, 
-              lng: longitude,
+              current_lat: latitude, 
+              current_lng: longitude,
               is_online: true 
             })
             .eq('id', paramedicId);

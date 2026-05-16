@@ -16,7 +16,7 @@ export async function GET(req: Request, { params }: { params: { requestId: strin
           full_name,
           phone_number,
           vehicle_registration,
-          average_rating,
+          rating,
           current_lat,
           current_lng
         )
@@ -38,7 +38,7 @@ export async function GET(req: Request, { params }: { params: { requestId: strin
         name: ride.paramedics.full_name,
         phone: ride.paramedics.phone_number || 'N/A',
         vehicle: ride.paramedics.vehicle_registration,
-        rating: ride.paramedics.average_rating || 5.0
+        rating: ride.paramedics.rating ?? 5.0
       } : null,
       current_location: ride.paramedics ? {
         lat: ride.paramedics.current_lat,
