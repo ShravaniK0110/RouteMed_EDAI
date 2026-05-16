@@ -1,4 +1,5 @@
 export const dynamic = "force-dynamic";
+
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { getDistanceKm } from '@/lib/matching';
@@ -6,37 +7,94 @@ import { getTotalFare } from '@/lib/pricing';
 
 export async function POST(req: Request) {
   try {
-    const { request_id, paramedic_id } = await req.json();
+    const body = await req.json();
+
+    const { request_id, paramedic_id } = body;
+
+    console.log('[ACCEPT RIDE] Incoming Request:', {
+      request_id,
+      paramedic_id,
+    });
 
     if (!request_id || !paramedic_id) {
-      return NextResponse.json({ error: 'Missing request_id or paramedic_id' }, { status: 400 });
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Missing request_id or paramedic_id',
+        },
+        { status: 400 }
+      );
     }
 
-    // 1. Fetch ride details
     const { data: ride, error: fetchError } = await supabase
       .from('rides')
       .select('*')
       .eq('id', request_id)
       .single();
 
+    console.log('[ACCEPT RIDE] Current Ride:', ride);
+
     if (fetchError || !ride) {
-      return NextResponse.json({ error: 'Ride not found' }, { status: 404 });
+      console.error('[ACCEPT RIDE] Ride Fetch Error:', fetchError);
+
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Ride not found',
+        },
+        { status: 404 }
+      );
     }
 
-    // 2. Fetch paramedic's current GPS location
+    if (ride.status !== 'searching') {
+      console.warn('[ACCEPT RIDE] Ride Already Taken:', ride.status);
+
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Ride already ${ride.status}`,
+        },
+        { status: 409 }
+      );
+    }
+
     const { data: paramedic, error: paramedicError } = await supabase
       .from('paramedics')
-      .select('current_lat, current_lng')
+      .select('id, current_lat, current_lng, is_online')
       .eq('id', paramedic_id)
       .single();
 
+    console.log('[ACCEPT RIDE] Paramedic:', paramedic);
+
     if (paramedicError || !paramedic) {
-      return NextResponse.json({ error: 'Paramedic not found' }, { status: 404 });
+      console.error('[ACCEPT RIDE] Paramedic Error:', paramedicError);
+
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Paramedic not found',
+        },
+        { status: 404 }
+      );
     }
 
-    // 3. Calculate real distance and fare
-    // If paramedic GPS hasn't fired yet, fall back to a minimum 2km estimate
-    const distanceKm = (paramedic.current_lat && paramedic.current_lng)
+   
+    if (!paramedic.is_online) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Paramedic is offline/unavailable',
+        },
+        { status: 409 }
+      );
+    }
+
+   
+    const hasGPS =
+      paramedic.current_lat !== null &&
+      paramedic.current_lng !== null;
+
+    const distanceKm = hasGPS
       ? getDistanceKm(
           paramedic.current_lat,
           paramedic.current_lng,
@@ -45,20 +103,26 @@ export async function POST(req: Request) {
         )
       : 2.0;
 
-    // Estimate travel time: assume average city speed of 30km/h in Pune traffic
-    const timeMins = Math.round((distanceKm / 30) * 60);
-
-    // Use risk_score from ride if available (set by ML analysis), else default 0
-    const riskScore = ride.risk_score ?? 0;
-
-    const totalFare = getTotalFare(distanceKm, timeMins, riskScore);
-
-    console.log(
-      `[Accept Ride] Ride ${request_id} | Distance: ${distanceKm.toFixed(2)}km | ` +
-      `Time: ${timeMins}min | Risk: ${riskScore} | Fare: ₹${totalFare.toFixed(2)}`
+    const timeMins = Math.max(
+      1,
+      Math.round((distanceKm / 30) * 60)
     );
 
-    // 4. Update ride — status, paramedic, timestamp, and calculated fare
+    const riskScore = ride.risk_score ?? 0;
+
+    const totalFare = getTotalFare(
+      distanceKm,
+      timeMins,
+      riskScore
+    );
+
+    console.log('[ACCEPT RIDE] Calculations:', {
+      distanceKm,
+      timeMins,
+      riskScore,
+      totalFare,
+    });
+
     const { data: updatedRide, error: updateError } = await supabase
       .from('rides')
       .update({
@@ -73,26 +137,52 @@ export async function POST(req: Request) {
       .select()
       .single();
 
+    console.log('[ACCEPT RIDE] Update Result:', updatedRide);
+
     if (updateError || !updatedRide) {
-      console.error('Acceptance DB Error:', updateError?.message);
-      return NextResponse.json({ error: 'Ride no longer available' }, { status: 409 });
+      console.error('[ACCEPT RIDE] Update Error:', updateError);
+
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Ride already accepted or unavailable',
+        },
+        { status: 409 }
+      );
     }
 
-    // 5. Mark paramedic as busy (offline) so smart-match won't re-assign them
-    await supabase
+    const { error: paramedicUpdateError } = await supabase
       .from('paramedics')
-      .update({ is_online: false })
+      .update({
+        is_online: false,
+      })
       .eq('id', paramedic_id);
+
+    if (paramedicUpdateError) {
+      console.error(
+        '[ACCEPT RIDE] Failed To Update Paramedic Status:',
+        paramedicUpdateError
+      );
+    }
 
     return NextResponse.json({
       success: true,
+      message: 'Ride accepted successfully',
+      ride: updatedRide,
       fare: Math.round(totalFare),
       distance_km: parseFloat(distanceKm.toFixed(2)),
       estimated_mins: timeMins,
     });
 
   } catch (err: any) {
-    console.error('Critical Accept API Error:', err.message);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    console.error('[ACCEPT RIDE] CRITICAL ERROR:', err);
+
+    return NextResponse.json(
+      {
+        success: false,
+        error: err.message || 'Internal server error',
+      },
+      { status: 500 }
+    );
   }
 }

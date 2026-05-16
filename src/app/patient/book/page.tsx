@@ -1,58 +1,76 @@
 'use client';
 
 import { supabase } from '@/lib/supabase';
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { MapPin, AlertTriangle, ChevronRight, Crosshair, Search, Activity } from 'lucide-react'
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle
+} from '@/components/ui/card';
+
+import {
+  MapPin,
+  AlertTriangle,
+  ChevronRight,
+  Crosshair,
+  Search,
+  Activity
+} from 'lucide-react';
 
 export default function PatientBook() {
-  const router = useRouter()
-  const [loading, setLoading] = useState(false)
-  const [isSearching, setIsSearching] = useState(false) // NEW: Uber waiting room state
-  const [activeRideId, setActiveRideId] = useState<string | null>(null) // NEW: Track the ride we are waiting for
-  const [useCurrentLocation, setUseCurrentLocation] = useState(true)
-  const [addressInput, setAddressInput] = useState('')
-  const [latitude, setLatitude] = useState<number | null>(null)
-  const [longitude, setLongitude] = useState<number | null>(null)
-  const [addressName, setAddressName] = useState('Locating...')
-  const [suggestions, setSuggestions] = useState<any[]>([])
-  const [emergencyType, setEmergencyType] = useState('Medical Emergency')
-  const [severity, setSeverity] = useState('High')
-  const [locationError, setLocationError] = useState('')
+  const router = useRouter();
 
-  // 1. Upgraded GPS Fetcher
+  const [loading, setLoading] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  const [activeRideId, setActiveRideId] = useState<string | null>(null);
+  const [useCurrentLocation, setUseCurrentLocation] = useState(true);
+  const [addressInput, setAddressInput] = useState('');
+  const [latitude, setLatitude] = useState<number | null>(null);
+  const [longitude, setLongitude] = useState<number | null>(null);
+  const [addressName, setAddressName] = useState('Locating...');
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [emergencyType, setEmergencyType] = useState('Medical Emergency');
+  const [severity, setSeverity] = useState('High');
+  const [locationError, setLocationError] = useState('');
+
   const fetchRealLocation = () => {
     if (navigator.geolocation) {
       setLocationError('Fetching GPS...');
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          setLatitude(position.coords.latitude)
-          setLongitude(position.coords.longitude)
-          setAddressName(`Lat: ${position.coords.latitude.toFixed(4)}, Lng: ${position.coords.longitude.toFixed(4)}`)
-          setLocationError('') 
+          setLatitude(position.coords.latitude);
+          setLongitude(position.coords.longitude);
+          setAddressName(
+            `Lat: ${position.coords.latitude.toFixed(4)}, Lng: ${position.coords.longitude.toFixed(4)}`
+          );
+          setLocationError('');
         },
         (error) => {
-          console.warn("GPS Error:", error.message);
-          setLatitude(18.5204); setLongitude(73.8567);
-          // Clarified the error so you know if the browser blocked it during testing
+          console.warn('GPS Error:', error.message);
+          setLatitude(18.5204);
+          setLongitude(73.8567);
           setLocationError('GPS Blocked by Browser. Defaulting to Pune Center.');
           setAddressName('Default Location (Enable Location in Browser)');
         },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-      )
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0
+        }
+      );
     }
-  }
+  };
 
   useEffect(() => {
     fetchRealLocation();
-  }, [])
+  }, []);
 
-  // NEW: Supabase Realtime Listener for the Waiting Room
   useEffect(() => {
     if (!isSearching || !activeRideId) return;
 
-    // Listen to our specific ride to see when a paramedic accepts it
     const channel = supabase
       .channel(`patient_wait_${activeRideId}`)
       .on(
@@ -65,7 +83,6 @@ export default function PatientBook() {
         },
         (payload) => {
           if (payload.new.status === 'accepted') {
-            // THE DRIVER ACCEPTED! Transition to the live tracking map!
             router.push(`/patient/tracking/${activeRideId}`);
           }
         }
@@ -77,108 +94,145 @@ export default function PatientBook() {
     };
   }, [isSearching, activeRideId, router]);
 
-  // 2. Search Logic (Nominatim API)
   const handleAddressInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value
-    setAddressInput(value)
-    if (value.length < 3) return setSuggestions([])
-    
-    try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(value + ' Pune')}&format=json&limit=5&countrycodes=in`)
-      const results = await res.json()
-      setSuggestions(results.map((r: any) => ({
-        label: r.display_name.split(',').slice(0, 3).join(','),
-        lat: parseFloat(r.lat),
-        lng: parseFloat(r.lon),
-      })))
-    } catch { 
-      setSuggestions([]) 
+    const value = e.target.value;
+    setAddressInput(value);
+
+    if (value.length < 3) {
+      return setSuggestions([]);
     }
-  }
+
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(
+          value + ' Pune'
+        )}&format=json&limit=5&countrycodes=in`
+      );
+      const results = await res.json();
+
+      setSuggestions(
+        results.map((r: any) => ({
+          label: r.display_name.split(',').slice(0, 3).join(','),
+          lat: parseFloat(r.lat),
+          lng: parseFloat(r.lon),
+        }))
+      );
+    } catch {
+      setSuggestions([]);
+    }
+  };
 
   const handleSelectSuggestion = (suggestion: any) => {
-    setAddressName(suggestion.label); 
-    setLatitude(suggestion.lat); 
+    setAddressName(suggestion.label);
+    setLatitude(suggestion.lat);
     setLongitude(suggestion.lng);
-    setAddressInput(suggestion.label); 
-    setSuggestions([]); 
+    setAddressInput(suggestion.label);
+    setSuggestions([]);
     setUseCurrentLocation(false);
-  }
+  };
 
-  // 3. Request Dispatch Logic
   const handleRequest = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!latitude || !longitude) return alert('Location required.');
+
+    if (loading) return;
+
+    if (!latitude || !longitude) {
+      return alert('Location required.');
+    }
+
     setLoading(true);
 
     try {
       const userStr = localStorage.getItem('user');
-      const user = userStr ? JSON.parse(userStr) : { id: '00000000-0000-0000-0000-000000000000' };
+      const user = userStr
+        ? JSON.parse(userStr)
+        : {
+            id: '00000000-0000-0000-0000-000000000000',
+            role: 'patient',
+          };
 
-      // 1. Get ML Hospital Analysis
       const mlResponse = await fetch('/api/booking/ml-analysis', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ latitude, longitude, emergencyType, severity }),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          latitude,
+          longitude,
+          emergencyType,
+          severity,
+        }),
       });
+
       const mlData = await mlResponse.json();
-      const bestHospitalId = mlData.selectedHospital?.id || mlData.allTopHospitals?.[0]?.id;
+      const bestHospitalId =
+        mlData.selectedHospital?.id || mlData.allTopHospitals?.[0]?.id;
 
-      // 2. Create Ride
-      const { data: ride, error: rideError } = await supabase
-        .from('rides')
-        .insert([{
-          patient_id: user.id,
-          hospital_id: bestHospitalId,
-          status: 'searching',
-          pickup_lat: latitude,
-          pickup_lng: longitude,
-          emergency_type: emergencyType, 
-          severity: severity
-        }])
-        .select()
-        .single();
+      const bookingResponse = await fetch('/api/booking/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          // Authorization header removed since generateJWT was removed
+        },
+        body: JSON.stringify({
+          patientId: user.id,
+          pickupLat: latitude,
+          pickupLng: longitude,
+          hospitalId: bestHospitalId,
+          severity,
+        }),
+      });
 
-      if (rideError) throw rideError;
+      const bookingData = await bookingResponse.json();
 
-      // 3. Trigger AUTOMATIC Match
-      setActiveRideId(ride.id);
+      if (!bookingData.success) {
+        throw new Error(bookingData.error || 'Ride creation failed');
+      }
+
+      setActiveRideId(bookingData.rideId);
       setIsSearching(true);
 
       await fetch('/api/booking/smart-match', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ request_id: ride.id })
+        headers: {
+          'Content-Type': 'application/json',
+          // Authorization header removed since generateJWT was removed
+        },
+        body: JSON.stringify({
+          request_id: bookingData.rideId,
+        }),
       });
 
     } catch (error: any) {
-      alert(`Dispatch Error: ${error.message}`);
+      console.error('[PATIENT BOOKING ERROR]', error);
+      alert(`Dispatch Error: ${error.message || 'Unknown error'}`);
       setIsSearching(false);
     } finally {
       setLoading(false);
     }
-  }
+  };
 
-  // UBER WAITING ROOM UI
   if (isSearching) {
     return (
       <div className="flex flex-col items-center justify-center h-[calc(100vh-4rem)] bg-slate-50 space-y-8 px-4">
         <div className="relative flex items-center justify-center mt-[-10vh]">
-          {/* Radar Pulse Rings */}
           <div className="absolute w-64 h-64 border-4 border-blue-500 rounded-full animate-ping opacity-20 duration-1000"></div>
           <div className="absolute w-48 h-48 border-4 border-blue-500 rounded-full animate-ping opacity-40 duration-700"></div>
           <div className="absolute w-32 h-32 bg-blue-200 rounded-full animate-pulse opacity-60"></div>
-          
-          {/* Center Icon */}
           <div className="z-10 w-20 h-20 bg-blue-600 rounded-full flex items-center justify-center shadow-2xl shadow-blue-500/50">
             <Activity className="h-10 w-10 text-white animate-pulse" />
           </div>
         </div>
 
         <div className="text-center space-y-3 z-10">
-          <h2 className="text-3xl font-black text-slate-800 tracking-tight">Locating Ambulance</h2>
+          <h2 className="text-3xl font-black text-slate-800 tracking-tight">
+            Locating Ambulance
+          </h2>
           <p className="text-slate-500 font-medium max-w-sm mx-auto">
-            Our ML engine is analyzing traffic, distance, and vehicle equipment to match you with the best response team for a <strong className="text-red-500 uppercase">{severity}</strong> condition.
+            Our ML engine is analyzing traffic, distance, and vehicle equipment to
+            match you with the best response team for a
+            <strong className="text-red-500 uppercase"> {severity} </strong>
+            condition.
           </p>
         </div>
 
@@ -195,12 +249,13 @@ export default function PatientBook() {
     );
   }
 
-  // STANDARD BOOKING UI
   return (
     <div className="max-w-2xl mx-auto py-6 space-y-6 px-4">
       <div className="mb-8 text-center sm:text-left">
         <h1 className="text-3xl font-bold text-slate-900">Request Ambulance</h1>
-        <p className="text-slate-500 text-sm">Real-time GPS dispatching for Pune Emergency Services.</p>
+        <p className="text-slate-500 text-sm">
+          Real-time GPS dispatching for Pune Emergency Services.
+        </p>
       </div>
 
       <form onSubmit={handleRequest} className="space-y-6">
@@ -213,8 +268,14 @@ export default function PatientBook() {
           </CardHeader>
           <CardContent className="pt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-400 uppercase">Emergency Type</label>
-              <select value={emergencyType} onChange={(e) => setEmergencyType(e.target.value)} className="w-full border border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+              <label className="text-[10px] font-bold text-slate-400 uppercase">
+                Emergency Type
+              </label>
+              <select
+                value={emergencyType}
+                onChange={(e) => setEmergencyType(e.target.value)}
+                className="w-full border border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              >
                 <option>Medical Emergency</option>
                 <option>Accident / Injury</option>
                 <option>Pregnancy</option>
@@ -222,8 +283,14 @@ export default function PatientBook() {
               </select>
             </div>
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-400 uppercase">Severity</label>
-              <select value={severity} onChange={(e) => setSeverity(e.target.value)} className="w-full border border-slate-200 rounded-lg p-2.5 text-sm font-bold text-red-600 outline-none focus:ring-2 focus:ring-red-500 bg-white">
+              <label className="text-[10px] font-bold text-slate-400 uppercase">
+                Severity
+              </label>
+              <select
+                value={severity}
+                onChange={(e) => setSeverity(e.target.value)}
+                className="w-full border border-slate-200 rounded-lg p-2.5 text-sm font-bold text-red-600 outline-none focus:ring-2 focus:ring-red-500 bg-white"
+              >
                 <option value="High">High</option>
                 <option value="Critical">Critical</option>
                 <option value="Medium">Medium</option>
@@ -241,35 +308,87 @@ export default function PatientBook() {
           </CardHeader>
           <CardContent className="pt-6 space-y-4">
             <div className="flex p-1 bg-slate-100 rounded-lg border border-slate-200">
-              <button type="button" onClick={() => { setUseCurrentLocation(true); fetchRealLocation(); }} className={`flex-1 py-1.5 text-xs font-bold rounded-md flex items-center justify-center gap-2 transition-all ${useCurrentLocation ? 'bg-white shadow-sm text-blue-600 border border-slate-200' : 'text-slate-500'}`}><Crosshair className="h-3 w-3" /> GPS</button>
-              <button type="button" onClick={() => setUseCurrentLocation(false)} className={`flex-1 py-1.5 text-xs font-bold rounded-md flex items-center justify-center gap-2 transition-all ${!useCurrentLocation ? 'bg-white shadow-sm text-blue-600 border border-slate-200' : 'text-slate-500'}`}><Search className="h-3 w-3" /> Search</button>
+              <button
+                type="button"
+                onClick={() => {
+                  setUseCurrentLocation(true);
+                  fetchRealLocation();
+                }}
+                className={`flex-1 py-1.5 text-xs font-bold rounded-md flex items-center justify-center gap-2 transition-all ${
+                  useCurrentLocation
+                    ? 'bg-white shadow-sm text-blue-600 border border-slate-200'
+                    : 'text-slate-500'
+                }`}
+              >
+                <Crosshair className="h-3 w-3" />
+                GPS
+              </button>
+              <button
+                type="button"
+                onClick={() => setUseCurrentLocation(false)}
+                className={`flex-1 py-1.5 text-xs font-bold rounded-md flex items-center justify-center gap-2 transition-all ${
+                  !useCurrentLocation
+                    ? 'bg-white shadow-sm text-blue-600 border border-slate-200'
+                    : 'text-slate-500'
+                }`}
+              >
+                <Search className="h-3 w-3" />
+                Search
+              </button>
             </div>
 
             {!useCurrentLocation && (
               <div className="relative">
-                <input type="text" className="w-full border border-slate-200 rounded-lg p-2.5 text-sm pl-10 outline-none focus:ring-2 focus:ring-blue-500" placeholder="Search in Pune..." value={addressInput} onChange={handleAddressInput} />
+                <input
+                  type="text"
+                  className="w-full border border-slate-200 rounded-lg p-2.5 text-sm pl-10 outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Search in Pune..."
+                  value={addressInput}
+                  onChange={handleAddressInput}
+                />
                 <MapPin className="absolute left-3 top-3.5 h-4 w-4 text-slate-400" />
                 {suggestions.length > 0 && (
                   <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-50 overflow-hidden">
                     {suggestions.map((s, i) => (
-                      <div key={i} onClick={() => handleSelectSuggestion(s)} className="p-3 hover:bg-slate-50 cursor-pointer text-xs font-medium border-b border-slate-100 last:border-0">{s.label}</div>
+                      <div
+                        key={i}
+                        onClick={() => handleSelectSuggestion(s)}
+                        className="p-3 hover:bg-slate-50 cursor-pointer text-xs font-medium border-b border-slate-100 last:border-0"
+                      >
+                        {s.label}
+                      </div>
                     ))}
                   </div>
                 )}
               </div>
             )}
-            <div className={`p-3 rounded-lg border flex items-center gap-3 ${locationError ? 'bg-amber-50 border-amber-100' : 'bg-green-50 border-green-100'}`}>
-               <div className={`h-2 w-2 rounded-full animate-pulse ${locationError ? 'bg-amber-500' : 'bg-green-500'}`} />
-               <p className="text-[10px] font-bold text-slate-600 uppercase tracking-tight overflow-hidden text-ellipsis whitespace-nowrap">Location: {addressName}</p>
+
+            <div
+              className={`p-3 rounded-lg border flex items-center gap-3 ${
+                locationError ? 'bg-amber-50 border-amber-100' : 'bg-green-50 border-green-100'
+              }`}
+            >
+              <div
+                className={`h-2 w-2 rounded-full animate-pulse ${
+                  locationError ? 'bg-amber-500' : 'bg-green-500'
+                }`}
+              />
+              <p className="text-[10px] font-bold text-slate-600 uppercase tracking-tight overflow-hidden text-ellipsis whitespace-nowrap">
+                Location: {addressName}
+              </p>
             </div>
           </CardContent>
         </Card>
 
-        <button type="submit" disabled={loading} className="w-full py-4 bg-slate-900 hover:bg-black text-white rounded-xl font-bold shadow-xl transition-all disabled:opacity-50 flex items-center justify-center gap-2 text-sm uppercase tracking-widest">
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full py-4 bg-slate-900 hover:bg-black text-white rounded-xl font-bold shadow-xl transition-all disabled:opacity-50 flex items-center justify-center gap-2 text-sm uppercase tracking-widest"
+        >
           {loading ? 'Optimizing Hospital Match...' : 'Confirm Request'}
           {!loading && <ChevronRight className="h-5 w-5" />}
         </button>
       </form>
     </div>
-  )
+  );
 }

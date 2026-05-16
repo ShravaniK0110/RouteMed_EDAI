@@ -68,16 +68,29 @@ export default function ParamedicActiveRide({ params }: { params: { rideId: stri
         const { latitude, longitude, speed } = position.coords;
         setCoords({ lat: latitude, lng: longitude });
 
-        await fetch('/api/paramedic/update-location', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            latitude, 
-            longitude, 
-            speed: speed || 0, 
-            paramedic_id: paramedicId  
-          }),
-        }).catch(() => {});
+        const token =
+  localStorage.getItem('token');
+
+await fetch('/api/paramedic/update-location', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    Authorization:
+      `Bearer ${token}`,
+  },
+  body: JSON.stringify({
+    latitude,
+    longitude,
+    speed: speed || 0,
+    paramedic_id:
+      paramedicId,
+  }),
+}).catch((err) => {
+  console.error(
+    'Location Update Failed:',
+    err
+  );
+});
       },
       (err) => console.error('GPS error:', err),
       { enableHighAccuracy: true }
