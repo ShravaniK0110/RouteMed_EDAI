@@ -1,48 +1,41 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase'; 
+import { supabase } from '@/lib/supabase';
 import { comparePassword, generateJWT } from '@/lib/auth';
+import { apiError, apiCatchError } from '@/lib/api-error';
+import { validateBody, AdminLoginSchema } from '@/lib/validation';
 
 export async function POST(req: Request) {
+  const { data: body, error: validationError } = await validateBody(req, AdminLoginSchema);
+  if (validationError) return validationError;
+
   try {
-    const { email, password } = await req.json();
+    const { email, password } = body;
 
-    if (!email || !password) {
-      return NextResponse.json({ error: 'Email and password are required' }, { status: 400 });
-    }
-
-    // 1. Fetch admin record from Supabase 'admins' table
     const { data: admin, error } = await supabase
       .from('admins')
       .select('*')
       .eq('email', email)
       .single();
 
-    // 2. Handle missing admin or database error
     if (error || !admin) {
       console.error('Login error:', error);
-      return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
+      return apiError('UNAUTHORIZED', 'Invalid credentials');
     }
 
-    // 3. Verify the password hash
     const isMatch = await comparePassword(password, admin.password_hash);
+    if (!isMatch) return apiError('UNAUTHORIZED', 'Invalid credentials');
 
-    if (!isMatch) {
-      return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
-    }
-
-    // 4. Generate the JWT for the admin session
     const token = generateJWT({ admin_id: admin.id, role: 'admin' });
 
     return NextResponse.json({
-      success: true,
+      success:  true,
       token,
       admin_id: admin.id,
-      role: 'admin',
-      message: 'Admin login successful'
+      role:     'admin',
+      message:  'Admin login successful',
     });
 
-  } catch (error: any) {
-    console.error('Error logging in admin:', error);
-    return NextResponse.json({ error: 'Login failed', details: error.message }, { status: 500 });
+  } catch (err: unknown) {
+    return apiCatchError(err, 'ADMIN_LOGIN');
   }
 }

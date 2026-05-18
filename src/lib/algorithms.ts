@@ -1,9 +1,14 @@
-import { supabase } from './supabase'; 
+import { supabase } from './supabase';
+import {
+  ML_URL,
+  DEFAULT_HOSPITAL_RATING,
+  MAX_ETA_SCORE_MINUTES,
+  MAX_RESPONSE_SCORE_MINUTES,
+  FALLBACK_SPEED_KMPH,
+  DEMAND_HIGH_RISK,
+  DEMAND_MEDIUM_RISK,
+} from './config';
 
-// 1. ADDED: Define the ML Backend URL dynamically
-const ML_URL = process.env.ML_BACKEND_URL || 'http://localhost:5001';
-
-// Keep the Haversine logic exactly as you had it
 function getDistanceKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -17,11 +22,9 @@ function getDistanceKm(lat1: number, lng1: number, lat2: number, lng2: number): 
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-// Fixed ML bridge to match your app.py routes
 async function getTravelTimeMinutes(distanceKm: number, hour: number, dayOfWeek: number): Promise<number> {
   try {
     const routeId = distanceKm < 3 ? 'R1' : distanceKm < 7 ? 'R2' : 'R3';
-    // 2. FIXED: Replaced localhost with the dynamic ML_URL
     const res = await fetch(`${ML_URL}/predict/traffic`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -34,10 +37,11 @@ async function getTravelTimeMinutes(distanceKm: number, hour: number, dayOfWeek:
         return Math.ceil(data.predicted_travel_minutes * (distanceKm / 5));
       }
     }
-  } catch (err) {
-    console.error("Traffic ML fallback triggered");
+  } catch {
+    console.error('Traffic ML fallback triggered');
   }
-  return Math.ceil((distanceKm / 20) * 60); // 20 km/h city fallback
+  // Fallback: use configured city speed constant
+  return Math.ceil((distanceKm / FALLBACK_SPEED_KMPH) * 60);
 }
 
 export async function selectOptimalHospital(
@@ -45,7 +49,6 @@ export async function selectOptimalHospital(
   emergencyType: string,
   severity: string
 ) {
-  // Fetch from Supabase (Fixed column names: lat/lng)
   const { data: hospitals, error } = await supabase
     .from('hospitals')
     .select('*')
@@ -57,10 +60,8 @@ export async function selectOptimalHospital(
   const hour = now.getHours();
   const dayOfWeek = now.getDay();
 
-  // Predict casualty demand
   let predictedCasualties = 1;
   try {
-    // 3. FIXED: Replaced localhost with the dynamic ML_URL
     const mlRes = await fetch(`${ML_URL}/predict/demand`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -68,19 +69,20 @@ export async function selectOptimalHospital(
     });
     if (mlRes.ok) {
       const mlData = await mlRes.json();
-      predictedCasualties = mlData.risk_score > 70 ? 3 : mlData.risk_score > 40 ? 2 : 1;
+      predictedCasualties =
+        mlData.risk_score > DEMAND_HIGH_RISK   ? 3 :
+        mlData.risk_score > DEMAND_MEDIUM_RISK ? 2 : 1;
     }
-  } catch (err) { /* silent fallback */ }
+  } catch { /* silent fallback — 1 casualty assumed */ }
 
   const results = [];
 
   for (const h of hospitals) {
-    // Note: using h.lat/h.lng from our new Supabase schema
-    const distKm = getDistanceKm(patientLoc.lat, patientLoc.lng, Number(h.latitude), Number(h.longitude));
+    const distKm    = getDistanceKm(patientLoc.lat, patientLoc.lng, Number(h.latitude), Number(h.longitude));
     const travelTime = await getTravelTimeMinutes(distKm, hour, dayOfWeek);
 
     // Factor 1: Travel Time (40%)
-    const timeScore = Math.max(0, (30 - travelTime) / 30) * 0.4;
+    const timeScore = Math.max(0, (MAX_ETA_SCORE_MINUTES - travelTime) / MAX_ETA_SCORE_MINUTES) * 0.4;
 
     // Factor 2: Bed Availability (30%)
     let bedScore = 0;
@@ -88,27 +90,24 @@ export async function selectOptimalHospital(
       bedScore = (h.available_beds / h.total_beds) * 0.3;
     }
 
-    // Factor 3: Quality (20%)
-    const qualityScore = ((h.rating ?? 4.0) / 5) * 0.2;
+    // Factor 3: Quality (20%) — use config default when rating is null
+    const qualityScore = ((h.rating ?? DEFAULT_HOSPITAL_RATING) / 5) * 0.2;
 
     // Factor 4: Response Time (10%)
-    const responseScore = Math.max(0, (20 - travelTime) / 20) * 0.1;
+    const responseScore = Math.max(0, (MAX_RESPONSE_SCORE_MINUTES - travelTime) / MAX_RESPONSE_SCORE_MINUTES) * 0.1;
 
-    // 4. FIXED: Specialty Multiplier now reads the equipment array
+    // Specialty multiplier
     let specialtyMultiplier = 1.0;
     const type = emergencyType.toLowerCase();
-    
-    // Convert equipment array to a lowercase string for easy searching
     const equipmentList = Array.isArray(h.equipment) ? h.equipment.join(' ').toLowerCase() : '';
 
     if (type.includes('chest') || type.includes('cardiac') || type.includes('arrest')) {
       specialtyMultiplier = (equipmentList.includes('cardiologist') || equipmentList.includes('cath lab')) ? 1.3 : 1.0;
-    } else if (severity === 'Critical' && !h.rating) { // Quality as proxy for ICU
+    } else if (severity === 'Critical' && !h.rating) {
       specialtyMultiplier = 0.7;
     }
 
     const totalScore = (timeScore + bedScore + qualityScore + responseScore) * specialtyMultiplier;
-
     results.push({ ...h, travelTime, totalScore });
   }
 

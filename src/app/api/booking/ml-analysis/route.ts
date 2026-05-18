@@ -1,36 +1,37 @@
-// src/app/api/booking/ml-analysis/route.ts
-import { NextRequest, NextResponse } from 'next/server'
-import { selectOptimalHospital } from '@/lib/algorithms'
+import { NextRequest, NextResponse } from 'next/server';
+import { selectOptimalHospital } from '@/lib/algorithms';
+import { apiError, apiCatchError } from '@/lib/api-error';
+import { validateBody, MlAnalysisSchema } from '@/lib/validation';
+import { DEFAULT_LAT, DEFAULT_LNG } from '@/lib/config';
 
 export async function POST(req: NextRequest) {
+  const { data, error } = await validateBody(req, MlAnalysisSchema);
+  if (error) return error;
+
   try {
-    const { latitude, longitude, emergencyType, severity } = await req.json()
-
     const patientLoc = {
-      lat: latitude ?? 18.5204,
-      lng: longitude ?? 73.8567,
-    }
+      lat: data.latitude  ?? DEFAULT_LAT,
+      lng: data.longitude ?? DEFAULT_LNG,
+    };
 
-    const topHospitals = await selectOptimalHospital(patientLoc, emergencyType, severity)
+    const topHospitals = await selectOptimalHospital(patientLoc, data.emergencyType, data.severity);
 
     if (!topHospitals || topHospitals.length === 0) {
-      return NextResponse.json({ error: 'No hospitals found in database' }, { status: 404 })
+      return apiError('NOT_FOUND', 'No hospitals found in database');
     }
 
-    const best = topHospitals[0]
+    const best = topHospitals[0];
 
     const factors = [
       `Travel Time Score: ${((best.timeScore ?? 0) * 100).toFixed(0)}% (40% weight) — ETA ~${(best.travelTime ?? 0).toFixed(1)} min`,
       `Bed Availability Score: ${((best.bedScore ?? 0) * 100).toFixed(0)}% (30% weight) — ${best.availableBeds ?? 0}/${best.totalBeds ?? 0} beds free`,
       `Hospital Quality Score: ${((best.qualityScore ?? 0) * 100).toFixed(0)}% (20% weight) — ${best.quality ?? 0}/5 stars`,
       `Response Time Score: ${((best.responseScore ?? 0) * 100).toFixed(0)}% (10% weight)`,
-      `Specialty Multiplier: ${best.specialtyMultiplier ?? 1}x — ${(best.specialtyMultiplier ?? 1) > 1 ? '✅ Matched specialty for this emergency' : (best.specialtyMultiplier ?? 1) < 1 ? '⚠️ Critical care penalty applied' : 'No specialty bonus'}`,
+      `Specialty Multiplier: ${best.specialtyMultiplier ?? 1}x`,
       `Final Score: ${((best.totalScore ?? 0) * 100).toFixed(1)} / 100`,
-    ]
+    ];
 
-    const equipmentList: string[] = Array.isArray(best.equipment)
-      ? best.equipment
-      : []
+    const equipmentList: string[] = Array.isArray(best.equipment) ? best.equipment : [];
 
     return NextResponse.json({
       selectedHospital: {
@@ -59,9 +60,9 @@ export async function POST(req: NextRequest) {
         predicted_casualties: 1,
       },
       rideId: `ride_${Date.now()}`,
-    })
-  } catch (error) {
-    console.error('ML Analysis error:', error)
-    return NextResponse.json({ error: 'Analysis failed', details: String(error) }, { status: 500 })
+    });
+
+  } catch (err: unknown) {
+    return apiCatchError(err, 'ML_ANALYSIS');
   }
 }

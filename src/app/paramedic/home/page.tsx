@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import dynamic from 'next/dynamic';
 import { Power, AlertTriangle, Navigation } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { useNotifications } from '@/lib/useNotification';
 
 const Map = dynamic<any>(() => import('@/components/Map'), { ssr: false });
 
@@ -79,6 +80,8 @@ export default function ParamedicHome() {
       await supabase.from('paramedics').update({ is_online: nextStatus }).eq('id', paramedicId);
     }
   };
+
+  const notifications = useNotifications(paramedicId);
 
   const acceptRide = async () => {
     if (!incomingRide || !paramedicId) return;

@@ -2,23 +2,22 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { verifyJWT } from '@/lib/auth';
+import { apiError, apiCatchError } from '@/lib/api-error';
 
 export async function GET(req: Request) {
   try {
-    // Strict Admin Authentication
     const authHeader = req.headers.get('authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'Unauthorized: Missing token' }, { status: 401 });
+      return apiError('UNAUTHORIZED', 'Missing token');
     }
 
     const token = authHeader.split(' ')[1];
     const decoded = verifyJWT(token);
-    
+
     if (!decoded || decoded.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
+      return apiError('FORBIDDEN', 'Admin access required');
     }
 
-    // Fetch rides via Supabase instead of Prisma
     const { data: rides, error } = await supabase
       .from('rides')
       .select(`
@@ -36,20 +35,16 @@ export async function GET(req: Request) {
       throw new Error('Database query failed');
     }
 
-    return NextResponse.json({ 
-      success: true, 
+    return NextResponse.json({
+      success: true,
       rides: rides.map(ride => ({
         ...ride,
         paramedic_name: ride.paramedics?.full_name || 'Unassigned',
-        vehicle: ride.paramedics?.vehicle_registration || 'N/A'
-      }))
+        vehicle: ride.paramedics?.vehicle_registration || 'N/A',
+      })),
     });
 
-  } catch (error: any) {
-    console.error('Error fetching global rides:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch rides', details: error.message }, 
-      { status: 500 }
-    );
+  } catch (err: unknown) {
+    return apiCatchError(err, 'ADMIN_RIDES');
   }
 }
