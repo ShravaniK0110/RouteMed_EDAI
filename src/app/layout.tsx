@@ -1,12 +1,9 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
 import "@/app/globals.css";
 import ClientLayoutWrapper from '@/components/layout/ClientLayoutWrapper'
 
-const inter = Inter({ subsets: ['latin'] })
-
 export const metadata: Metadata = {
-  title: 'AmbulanceRoute Pune',
+  title: 'RouteMed · Emergency Dispatch',
   description: 'Intelligent Emergency Medical Dispatch System',
 }
 
@@ -17,7 +14,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${inter.className} bg-secondary text-gray-900 antialiased`}>
+      <body className="bg-secondary text-ink antialiased">
         <ClientLayoutWrapper>
           {children}
         </ClientLayoutWrapper>
