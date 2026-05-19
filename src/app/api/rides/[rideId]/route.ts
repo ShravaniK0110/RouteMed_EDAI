@@ -1,19 +1,88 @@
-import { NextRequest, NextResponse } from 'next/server'
+export const dynamic = 'force-dynamic';
 
-// This endpoint returns active rides for paramedics
-export async function GET(req: NextRequest) {
+import { NextRequest, NextResponse } from 'next/server';
+import { supabase } from '@/lib/supabase';
+
+export async function GET(
+  req: NextRequest,
+  context: {
+    params: {
+      rideId: string;
+    };
+  }
+) {
+
   try {
-    // In production, fetch from database
-    // For now, we'll read from a global store
-    const rideStore = (global as any).activeRides || []
-    
-    const activeRides = rideStore.filter((ride: any) => 
-      ride.status === 'searching' || ride.status === 'assigned'
-    )
 
-    return NextResponse.json({ rides: activeRides })
-  } catch (error) {
-    console.error('Error fetching rides:', error)
-    return NextResponse.json({ error: 'Failed to fetch rides' }, { status: 500 })
+    const rideId =
+      context.params.rideId;
+
+    // FETCH RIDE FROM SUPABASE
+    const {
+      data: ride,
+      error
+    } = await supabase
+      .from('rides')
+      .select(`
+        *,
+        hospitals (
+          id,
+          name,
+          latitude,
+          longitude,
+          address
+        ),
+        paramedics (
+          id,
+          name,
+          phone,
+          current_lat,
+          current_lng,
+          is_online
+        )
+      `)
+      .eq('id', rideId)
+      .single();
+
+    if (
+      error ||
+      !ride
+    ) {
+
+      console.error(
+        '[RIDE FETCH ERROR]',
+        error
+      );
+
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Ride not found',
+        },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      ride,
+    });
+
+  } catch (error: any) {
+
+    console.error(
+      '[RIDE API ERROR]',
+      error
+    );
+
+    return NextResponse.json(
+      {
+        success: false,
+        error:
+          error.message ||
+          'Failed to fetch ride',
+      },
+      { status: 500 }
+    );
   }
 }
