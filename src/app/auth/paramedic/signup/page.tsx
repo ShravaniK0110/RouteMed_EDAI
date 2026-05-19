@@ -40,33 +40,99 @@ export default function ParamedicAuth() {
     }
   };
 
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (loading) return;
-    setError('');
-    const { name, phone: regPhone, vehicle } = regData;
-    if (!name.trim() || !regPhone.trim() || !vehicle.trim()) { setError('Please fill all fields'); return; }
-    setLoading(true);
-    try {
-      const { data: existing } = await supabase
-        .from('paramedics').select('id').eq('phone_number', regPhone.trim()).maybeSingle();
-      if (existing) {
-        setError('Phone already registered. Please log in instead.');
-        setTab('login'); setPhone(regPhone.trim()); return;
+const handleRegister = async (
+  e: React.FormEvent
+) => {
+
+  e.preventDefault();
+
+  if (loading) return;
+
+  setError('');
+
+  const {
+    name,
+    phone: regPhone,
+    vehicle
+  } = regData;
+
+  if (
+    !name.trim() ||
+    !regPhone.trim() ||
+    !vehicle.trim()
+  ) {
+
+    setError(
+      'Please fill all fields'
+    );
+
+    return;
+  }
+
+  setLoading(true);
+
+  try {
+
+    const res = await fetch(
+      '/api/auth/paramedic/register',
+      {
+        method: 'POST',
+
+        headers: {
+          'Content-Type':
+            'application/json',
+        },
+
+        body: JSON.stringify({
+          name: name.trim(),
+          phone: regPhone.trim(),
+          vehicle: vehicle.trim(),
+        }),
       }
-      const { data, error: insertError } = await supabase
-        .from('paramedics')
-        .insert([{ full_name: name.trim(), phone_number: regPhone.trim(), vehicle_registration: vehicle.trim(), is_online: false, rating: 5 }])
-        .select().single();
-      if (insertError) throw insertError;
-      localStorage.setItem('user', JSON.stringify({ id: data.id, role: 'paramedic', name: data.full_name }));
-      router.push('/paramedic/home');
-    } catch (err: any) {
-      setError(err.message || 'Registration failed.');
-    } finally {
-      setLoading(false);
+    );
+
+    const data =
+      await res.json();
+
+    if (
+      !res.ok ||
+      !data.success
+    ) {
+
+      setError(
+        data.error ||
+        'Registration failed'
+      );
+
+      return;
     }
-  };
+
+    localStorage.setItem(
+      'user',
+      JSON.stringify(data.user)
+    );
+
+    localStorage.setItem(
+      'token',
+      data.token
+    );
+
+    router.push(
+      '/paramedic/home'
+    );
+
+  } catch (err: any) {
+
+    setError(
+      err.message ||
+      'Registration failed'
+    );
+
+  } finally {
+
+    setLoading(false);
+  }
+};
 
   return (
     <div className="min-h-screen bg-secondary flex flex-col">

@@ -4,11 +4,9 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import { checkForBetterRoute } from '@/lib/rerouting';
+import { getDistanceKm, calculateETA} from '@/lib/matching';
 import dynamic from 'next/dynamic';
-import {
-  Navigation, AlertTriangle, MapPin, Clock, Activity,
-  User, Hospital, RefreshCw, CheckCircle, Zap
-} from 'lucide-react';
+import { Navigation, AlertTriangle, MapPin, Clock, Activity, User, Hospital, RefreshCw, CheckCircle, Zap} from 'lucide-react';
 
 const Map = dynamic(() => import('@/components/Map'), { ssr: false });
 
@@ -104,23 +102,122 @@ await fetch('/api/paramedic/update-location', {
     return () => clearInterval(t);
   }, []);
 
+    // Live GPS-based ETA Calculation
   useEffect(() => {
-    const t = setInterval(() => setEtaMinutes(e => Math.max(0, e - 1 / 60)), 1000);
-    return () => clearInterval(t);
-  }, []);
 
-  // 4. Reroute Check
+    if (
+      !coords ||
+      !rideData
+    ) return;
+
+    const destinationLat =
+      missionPhase === 'pickup'
+        ? rideData.pickup_lat
+        : hospitalData?.lat;
+
+    const destinationLng =
+      missionPhase === 'pickup'
+        ? rideData.pickup_lng
+        : hospitalData?.lng;
+
+    if (
+      !destinationLat ||
+      !destinationLng
+    ) return;
+
+    const distanceKm =
+      getDistanceKm(
+        coords.lat,
+        coords.lng,
+        destinationLat,
+        destinationLng
+      );
+
+    const liveEta =
+      calculateETA(distanceKm);
+
+    setEtaMinutes(liveEta);
+
+  }, [
+    coords,
+    rideData,
+    hospitalData,
+    missionPhase
+  ]);
+
+  // 4. Intelligent Dynamic Rerouting
   useEffect(() => {
+
+    if (!coords) return;
+
+    let rerouteCooldown = false;
+
     const interval = setInterval(async () => {
-      if (coords) {
-        const result = await checkForBetterRoute(params.rideId, coords.lat, coords.lng);
-        if (result.suggestReroute) {
-          setRerouteNotice(`Faster route via ${result.newRouteName} — saves ${result.timeSaved} min`);
+
+      try {
+
+        const result =
+          await checkForBetterRoute(
+            params.rideId,
+            coords.lat,
+            coords.lng
+          );
+
+        if (
+          result.suggestReroute &&
+          !rerouteCooldown
+        ) {
+
+          rerouteCooldown = true;
+
+          // Update ETA dynamically
+          if (result.timeSaved) {
+
+            setEtaMinutes((prev) =>
+              Math.max(
+                1,
+                prev - result.timeSaved
+              )
+            );
+          }
+
+          // Show reroute banner
+          setRerouteNotice(
+            `AI Rerouting Suggested • ${result.newRouteName} • Saves ${result.timeSaved} mins`
+          );
+
+          console.log(
+            '[REROUTE TRIGGERED]',
+            result
+          );
+
+          // Auto-hide popup after 8 sec
+          setTimeout(() => {
+            setRerouteNotice(null);
+          }, 8000);
+
+          // Prevent spam alerts
+          setTimeout(() => {
+            rerouteCooldown = false;
+          }, 30000);
         }
+
+      } catch (err) {
+
+        console.error(
+          '[REROUTE CHECK ERROR]',
+          err
+        );
       }
+
     }, 10000);
+
     return () => clearInterval(interval);
-  }, [coords, params.rideId]);
+
+  }, [
+    coords,
+    params.rideId
+  ]);
 
   const formatTime = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
 
@@ -246,7 +343,14 @@ await fetch('/api/paramedic/update-location', {
             </div>
             <div className="bg-slate-950 rounded-xl p-2 text-center border border-slate-800">
               <p className="text-slate-500 mb-1">Dist.</p>
-              <p className="font-black text-blue-400 text-lg">{(etaMinutes / 3).toFixed(1)}km</p>
+              <p className="font-black text-blue-400 text-lg">{coords
+  ? getDistanceKm(
+      coords.lat,
+      coords.lng,
+      targetLat,
+      targetLng
+    ).toFixed(1)
+  : '0.0'}km</p>
             </div>
           </div>
         </div>
@@ -273,6 +377,25 @@ await fetch('/api/paramedic/update-location', {
           </p>
         </div>
       </div>
+
+            {/* Live AI Reroute Notice */}
+      {rerouteNotice && (
+        <div className="bg-amber-500/10 border border-amber-400/40 rounded-2xl p-4 animate-pulse">
+          <div className="flex items-start gap-3">
+            <RefreshCw className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
+
+            <div>
+              <p className="text-xs font-black uppercase tracking-widest text-amber-400 mb-1">
+                AI Route Optimization
+              </p>
+
+              <p className="text-sm text-amber-100 font-semibold">
+                {rerouteNotice}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Dynamic Actions */}
       <div className="mt-2">

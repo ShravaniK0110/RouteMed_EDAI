@@ -4,7 +4,7 @@ import {
   DEFAULT_HOSPITAL_RATING,
   MAX_ETA_SCORE_MINUTES,
   MAX_RESPONSE_SCORE_MINUTES,
-  FALLBACK_SPEED_KMPH,
+  FALLBACK_AMBULANCE_SPEED_KMPH,
   DEMAND_HIGH_RISK,
   DEMAND_MEDIUM_RISK,
 } from './config';
@@ -41,7 +41,7 @@ async function getTravelTimeMinutes(distanceKm: number, hour: number, dayOfWeek:
     console.error('Traffic ML fallback triggered');
   }
   // Fallback: use configured city speed constant
-  return Math.ceil((distanceKm / FALLBACK_SPEED_KMPH) * 60);
+  return Math.ceil((distanceKm / FALLBACK_AMBULANCE_SPEED_KMPH) * 60);
 }
 
 export async function selectOptimalHospital(
