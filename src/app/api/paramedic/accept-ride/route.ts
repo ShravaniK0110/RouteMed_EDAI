@@ -231,10 +231,7 @@ export async function POST(req: Request) {
         updateError
       );
 
-      return apiError(
-        'SERVER_ERROR',
-        'Ride accepted but update failed'
-      );
+      return apiError('INTERNAL_ERROR', 'Something went wrong');
     }
 
     // ---------------------------------------------------
