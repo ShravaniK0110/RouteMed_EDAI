@@ -16,8 +16,8 @@ export default function RootLanding() {
       <main className="flex-1 flex flex-col items-center justify-center px-6 py-16">
         <div className="max-w-3xl w-full">
           <div className="flex items-center gap-2 mb-8">
-            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-            <span className="text-xs font-mono text-dark/60 uppercase tracking-widest">System Operational</span>
+            <span className="" />
+            <span className="text-xs font-mono text-dark/60 uppercase tracking-widest"></span>
           </div>
 
           <h1 className="text-5xl sm:text-6xl font-extrabold text-ink leading-tight mb-4 tracking-tight">
