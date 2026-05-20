@@ -1,148 +1,74 @@
 import { NextResponse } from 'next/server';
-
 import { supabase } from '@/lib/supabase';
+import { apiError, apiCatchError } from '@/lib/api-error';
 
-import {
-  apiError,
-  apiCatchError
-} from '@/lib/api-error';
-
-import {
-  validateBody,
-  BookingCreateSchema
-} from '@/lib/validation';
-
-import {
-  requireRole
-} from '@/middleware/auth';
-
-export async function POST(
-  req: Request
-) {
-
-  // STRICT ROLE ENFORCEMENT
-  const auth = requireRole(
-    req,
-    'patient'
-  );
-
-  if (auth instanceof NextResponse) {
-    return auth;
-  }
-
-  const {
-    data: body,
-    error: validationError
-  } = await validateBody(
-    req,
-    BookingCreateSchema
-  );
-
-  if (validationError) {
-    return validationError;
-  }
-
+export async function POST(req: Request) {
   try {
-
-const bookingData = body as {
-  pickupLat: number;
-  pickupLng: number;
-  hospitalId: string;
-  severity?: string;
-};
-
-const {
-  pickupLat,
-  pickupLng,
-  hospitalId,
-  severity
-} = bookingData;
-
-    const patientId = auth.id;
-
-    console.log(
-      '[BOOKING CREATE] Incoming Request:',
-      {
-        patientId,
-        pickupLat,
-        pickupLng,
-        hospitalId,
-        severity
-      }
-    );
-
-    // FIX:
-    // severity now stored in rides table
+    const body = await req.json();
 
     const {
-      data: ride,
-      error: rideError
-    } = await supabase
+      patientId,
+      pickupLat,
+      pickupLng,
+      hospitalId,
+      severity,
+    } = body;
+
+    if (
+      !patientId ||
+      pickupLat === undefined ||
+      pickupLng === undefined ||
+      !hospitalId
+    ) {
+      return apiError('BAD_REQUEST', 'Missing required booking fields');
+    }
+
+    const { data: patient, error: patientError } = await supabase
+      .from('patients')
+      .select('id')
+      .eq('id', patientId)
+      .single();
+
+    if (patientError || !patient) {
+      return apiError('NOT_FOUND', 'Patient not found');
+    }
+
+    const { data: ride, error: rideError } = await supabase
       .from('rides')
-      .insert([{
-        patient_id: patientId,
-
-        hospital_id: hospitalId,
-
-        pickup_lat: pickupLat,
-
-        pickup_lng: pickupLng,
-
-        severity:
-          severity || 'medium',
-
-        status: 'searching',
-      }])
+      .insert([
+        {
+          patient_id: patientId,
+          hospital_id: hospitalId,
+          pickup_lat: pickupLat,
+          pickup_lng: pickupLng,
+          severity: severity || 'Medium',
+          status: 'searching',
+        },
+      ])
       .select()
       .single();
 
     if (rideError) {
-
-      console.error(
-        '[BOOKING CREATE] Ride Insert Error:',
-        rideError
-      );
-
+      console.error('[BOOKING CREATE] Ride Insert Error:', rideError);
       throw rideError;
     }
 
-    console.log(
-      '[BOOKING CREATE] Ride Created:',
-      ride
-    );
-
-    // Hospital alert
-    const {
-      error: alertError
-    } = await supabase
+    await supabase
       .from('hospital_alerts')
-      .insert([{
-        ride_id: ride.id,
-
-        hospital_id: hospitalId,
-
-        severity:
-          severity || 'medium',
-      }]);
-
-    if (alertError) {
-
-      console.error(
-        '[BOOKING CREATE] Hospital Alert Error:',
-        alertError
-      );
-    }
+      .insert([
+        {
+          ride_id: ride.id,
+          hospital_id: hospitalId,
+          severity: severity || 'Medium',
+        },
+      ]);
 
     return NextResponse.json({
       success: true,
-      rideId: ride.id
+      rideId: ride.id,
     });
 
   } catch (err: unknown) {
-
-    return apiCatchError(
-      err,
-      'BOOKING_CREATE'
-    );
+    return apiCatchError(err, 'BOOKING_CREATE');
   }
 }

@@ -13,7 +13,7 @@ import {
 
 import {
   MapPin,
- AlertTriangle,
+  AlertTriangle,
   ChevronRight,
   Crosshair,
   Search,
@@ -166,13 +166,13 @@ export default function PatientBook() {
     setLoading(true);
 
     try {
-      // HIGH PRIORITY FIX:
-      // Prevent fake guest booking
-
       const userStr =
         localStorage.getItem('user');
 
-      if (!userStr) {
+      const token =
+        localStorage.getItem('token');
+
+      if (!userStr || !token) {
         alert(
           'Please login before requesting ambulance.'
         );
@@ -186,13 +186,11 @@ export default function PatientBook() {
 
       const user = JSON.parse(userStr);
 
-      // HIGH PRIORITY FIX:
-      // Validate user id
-
       if (!user?.id) {
         alert('Invalid user session.');
 
         localStorage.removeItem('user');
+        localStorage.removeItem('token');
 
         router.push('/login');
 
@@ -200,9 +198,6 @@ export default function PatientBook() {
 
         return;
       }
-
-      // HIGH PRIORITY FIX:
-      // Validate role
 
       if (user.role !== 'patient') {
         alert(
@@ -237,37 +232,40 @@ export default function PatientBook() {
         mlData.selectedHospital?.id ||
         mlData.allTopHospitals?.[0]?.id;
 
-      // HIGH PRIORITY FIX:
-      // Stop booking if no hospital found
-
       if (!bestHospitalId) {
         throw new Error(
           'No hospital available nearby'
         );
       }
 
-      const bookingResponse = await fetch(
-        '/api/booking/create',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type':
-              'application/json',
-          },
-          body: JSON.stringify({
-            patientId: user.id,
-            pickupLat: latitude,
-            pickupLng: longitude,
-            hospitalId: bestHospitalId,
-            severity,
-          }),
-        }
-      );
+      const bookingResponse =
+        await fetch(
+          '/api/booking/create',
+          {
+            method: 'POST',
+
+            headers: {
+              'Content-Type':
+                'application/json',
+
+              Authorization:
+                `Bearer ${token}`,
+            },
+
+            body: JSON.stringify({
+              patientId: user.id,
+              pickupLat: latitude,
+              pickupLng: longitude,
+              hospitalId: bestHospitalId,
+              severity,
+            }),
+          }
+        );
 
       const bookingData =
         await bookingResponse.json();
 
-      if (!bookingData.success) {
+      if (!bookingResponse.ok || !bookingData.success) {
         throw new Error(
           bookingData.error ||
             'Ride creation failed'
@@ -285,10 +283,15 @@ export default function PatientBook() {
           '/api/booking/smart-match',
           {
             method: 'POST',
+
             headers: {
               'Content-Type':
                 'application/json',
+
+              Authorization:
+                `Bearer ${token}`,
             },
+
             body: JSON.stringify({
               request_id:
                 bookingData.rideId,
@@ -299,10 +302,7 @@ export default function PatientBook() {
       const smartMatchData =
         await smartMatchResponse.json();
 
-      // HIGH PRIORITY FIX:
-      // Detect smart match failure
-
-      if (!smartMatchResponse.ok) {
+      if (!smartMatchResponse.ok || !smartMatchData.success) {
         throw new Error(
           smartMatchData.error ||
             'Smart matching failed'
@@ -331,9 +331,7 @@ export default function PatientBook() {
   if (isSearching) {
     return (
       <div className="flex flex-col items-center justify-center h-[calc(100vh-4rem)] bg-slate-50 space-y-8 px-4">
-
         <div className="relative flex items-center justify-center mt-[-10vh]">
-
           <div className="absolute w-64 h-64 border-4 border-blue-500 rounded-full animate-ping opacity-20 duration-1000"></div>
 
           <div className="absolute w-48 h-48 border-4 border-blue-500 rounded-full animate-ping opacity-40 duration-700"></div>
@@ -341,14 +339,11 @@ export default function PatientBook() {
           <div className="absolute w-32 h-32 bg-blue-200 rounded-full animate-pulse opacity-60"></div>
 
           <div className="z-10 w-20 h-20 bg-blue-600 rounded-full flex items-center justify-center shadow-2xl shadow-blue-500/50">
-
             <Activity className="h-10 w-10 text-white animate-pulse" />
-
           </div>
         </div>
 
         <div className="text-center space-y-3 z-10">
-
           <h2 className="text-3xl font-black text-slate-800 tracking-tight">
             Locating Ambulance
           </h2>
@@ -367,11 +362,8 @@ export default function PatientBook() {
         </div>
 
         <div className="w-full max-w-xs bg-white p-4 rounded-2xl shadow-lg border border-slate-100 flex items-center gap-4">
-
           <div className="h-10 w-10 bg-slate-100 rounded-full flex items-center justify-center shrink-0">
-
             <Search className="h-5 w-5 text-slate-400 animate-spin-slow" />
-
           </div>
 
           <div>
@@ -390,9 +382,7 @@ export default function PatientBook() {
 
   return (
     <div className="max-w-2xl mx-auto py-6 space-y-6 px-4">
-
       <div className="mb-8 text-center sm:text-left">
-
         <h1 className="text-3xl font-bold text-slate-900">
           Request Ambulance
         </h1>
@@ -406,24 +396,17 @@ export default function PatientBook() {
         onSubmit={handleRequest}
         className="space-y-6"
       >
-
         <Card className="shadow-sm border-slate-200">
-
           <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-3">
-
             <CardTitle className="text-sm flex items-center gap-2 text-slate-700">
-
               <AlertTriangle className="h-4 w-4 text-amber-500" />
 
               Emergency Information
-
             </CardTitle>
           </CardHeader>
 
           <CardContent className="pt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
-
             <div className="space-y-1.5">
-
               <label className="text-[10px] font-bold text-slate-400 uppercase">
                 Emergency Type
               </label>
@@ -437,7 +420,6 @@ export default function PatientBook() {
                 }
                 className="w-full border border-slate-200 rounded-lg p-2.5 text-sm text-black outline-none focus:ring-2 focus:ring-blue-500 bg-white"
               >
-
                 <option>
                   Medical Emergency
                 </option>
@@ -453,12 +435,10 @@ export default function PatientBook() {
                 <option>
                   Cardiac Arrest
                 </option>
-
               </select>
             </div>
 
             <div className="space-y-1.5">
-
               <label className="text-[10px] font-bold text-slate-400 uppercase">
                 Severity
               </label>
@@ -472,7 +452,6 @@ export default function PatientBook() {
                 }
                 className="w-full border border-slate-200 rounded-lg p-2.5 text-sm font-bold text-red-600 outline-none focus:ring-2 focus:ring-red-500 bg-white"
               >
-
                 <option value="High">
                   High
                 </option>
@@ -484,29 +463,22 @@ export default function PatientBook() {
                 <option value="Medium">
                   Medium
                 </option>
-
               </select>
             </div>
           </CardContent>
         </Card>
 
         <Card className="shadow-sm border-slate-200">
-
           <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-3">
-
             <CardTitle className="text-sm flex items-center gap-2 text-slate-700">
-
               <MapPin className="h-4 w-4 text-blue-500" />
 
               Pickup Location
-
             </CardTitle>
           </CardHeader>
 
           <CardContent className="pt-6 space-y-4">
-
             <div className="flex p-1 bg-slate-100 rounded-lg border border-slate-200">
-
               <button
                 type="button"
                 onClick={() => {
@@ -522,11 +494,9 @@ export default function PatientBook() {
                     : 'text-slate-500'
                 }`}
               >
-
                 <Crosshair className="h-3 w-3" />
 
                 GPS
-
               </button>
 
               <button
@@ -542,17 +512,14 @@ export default function PatientBook() {
                     : 'text-slate-500'
                 }`}
               >
-
                 <Search className="h-3 w-3" />
 
                 Search
-
               </button>
             </div>
 
             {!useCurrentLocation && (
               <div className="relative">
-
                 <input
                   type="text"
                   className="w-full border border-slate-200 rounded-lg p-2.5 text-sm pl-10 outline-none focus:ring-2 focus:ring-blue-500"
@@ -567,7 +534,6 @@ export default function PatientBook() {
 
                 {suggestions.length > 0 && (
                   <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-50 overflow-hidden">
-
                     {suggestions.map(
                       (s, i) => (
                         <div
@@ -583,7 +549,6 @@ export default function PatientBook() {
                         </div>
                       )
                     )}
-
                   </div>
                 )}
               </div>
@@ -596,7 +561,6 @@ export default function PatientBook() {
                   : 'bg-green-50 border-green-100'
               }`}
             >
-
               <div
                 className={`h-2 w-2 rounded-full animate-pulse ${
                   locationError
@@ -606,9 +570,7 @@ export default function PatientBook() {
               />
 
               <p className="text-[10px] font-bold text-slate-600 uppercase tracking-tight overflow-hidden text-ellipsis whitespace-nowrap">
-
                 Location: {addressName}
-
               </p>
             </div>
           </CardContent>
@@ -619,7 +581,6 @@ export default function PatientBook() {
           disabled={loading}
           className="w-full py-4 bg-slate-900 hover:bg-black text-white rounded-xl font-bold shadow-xl transition-all disabled:opacity-50 flex items-center justify-center gap-2 text-sm uppercase tracking-widest"
         >
-
           {loading
             ? 'Optimizing Hospital Match...'
             : 'Confirm Request'}
