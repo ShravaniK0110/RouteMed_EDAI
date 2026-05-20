@@ -5,7 +5,14 @@ import { apiError, apiCatchError } from '@/lib/api-error';
 import { validateBody, AdminLoginSchema } from '@/lib/validation';
 
 export async function POST(req: Request) {
-  const { data: body, error: validationError } = await validateBody(req, AdminLoginSchema);
+  const {
+    data: body,
+    error: validationError,
+  }: {
+    data: any;
+    error: any;
+  } = await validateBody(req, AdminLoginSchema);
+
   if (validationError) return validationError;
 
   try {
@@ -18,21 +25,32 @@ export async function POST(req: Request) {
       .single();
 
     if (error || !admin) {
-      console.error('Login error:', error);
+      console.error('[ADMIN LOGIN] Login error:', error);
       return apiError('UNAUTHORIZED', 'Invalid credentials');
     }
 
-    const isMatch = await comparePassword(password, admin.password_hash);
-    if (!isMatch) return apiError('UNAUTHORIZED', 'Invalid credentials');
+    const isMatch = await comparePassword(
+      password,
+      admin.password_hash
+    );
 
-    const token = generateJWT({ admin_id: admin.id, role: 'admin' });
+    if (!isMatch) {
+      return apiError('UNAUTHORIZED', 'Invalid credentials');
+    }
+
+    const token = generateJWT({
+      id: admin.id,
+      role: 'admin',
+      email: admin.email,
+      name: admin.full_name || 'Admin',
+    });
 
     return NextResponse.json({
-      success:  true,
+      success: true,
       token,
       admin_id: admin.id,
-      role:     'admin',
-      message:  'Admin login successful',
+      role: 'admin',
+      message: 'Admin login successful',
     });
 
   } catch (err: unknown) {
