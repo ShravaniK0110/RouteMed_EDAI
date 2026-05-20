@@ -9,7 +9,7 @@ export default function RootLanding() {
             <span className="text-white text-xs font-mono font-bold">RM</span>
           </div>
           <span className="font-semibold text-ink tracking-tight">RouteMed</span>
-          <span className="text-dark/50 text-sm hidden sm:block">· Pune Emergency Dispatch</span>
+          <span className="text-dark/50 text-sm hidden sm:block">· Emergency Dispatch System</span>
         </div>
       </header>
 
@@ -25,7 +25,7 @@ export default function RootLanding() {
             <span className="text-primary">where it counts.</span>
           </h1>
           <p className="text-dark text-lg mb-12 max-w-xl leading-relaxed">
-            Intelligent ambulance dispatch for Pune. GPS routing, live tracking, and ML-optimised hospital matching.
+            Intelligent ambulance dispatch. GPS routing, live tracking, and ML-optimised hospital matching.
           </p>
 
           <div className="grid gap-4 sm:grid-cols-3">
@@ -75,7 +75,6 @@ export default function RootLanding() {
       </main>
 
       <footer className="border-t border-primary/10 px-8 py-4 text-center">
-        <span className="text-xs text-dark/40 font-mono">Built for Pune</span>
       </footer>
     </div>
   )

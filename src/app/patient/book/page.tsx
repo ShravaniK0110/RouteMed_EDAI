@@ -435,7 +435,7 @@ export default function PatientBook() {
                     e.target.value
                   )
                 }
-                className="w-full border border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                className="w-full border border-slate-200 rounded-lg p-2.5 text-sm text-black outline-none focus:ring-2 focus:ring-blue-500 bg-white"
               >
 
                 <option>
