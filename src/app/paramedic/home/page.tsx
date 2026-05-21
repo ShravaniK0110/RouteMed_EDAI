@@ -3,7 +3,13 @@
 import { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import dynamic from 'next/dynamic';
-import { Power, AlertTriangle, Navigation, X } from 'lucide-react';
+import {
+  Power,
+  AlertTriangle,
+  Navigation,
+  X,
+  Ambulance,
+} from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useNotifications } from '@/lib/useNotification';
 
@@ -11,25 +17,59 @@ const Map = dynamic<any>(() => import('@/components/Map'), { ssr: false });
 
 export default function ParamedicHome() {
   const router = useRouter();
+
   const [isOnline, setIsOnline] = useState(false);
   const [actionLoading, setActionLoading] = useState<'accept' | 'reject' | null>(null);
   const [incomingRide, setIncomingRide] = useState<any>(null);
   const [paramedicId, setParamedicId] = useState<string | null>(null);
   const [currentPos, setCurrentPos] = useState({ lat: 18.5204, lng: 73.8567 });
 
+  const [vehicleType, setVehicleType] = useState('Basic Ambulance');
+  const [vehicleRegistration, setVehicleRegistration] = useState('');
+
   // Ref guard — prevents double-accept if user taps twice fast
   const isAccepting = useRef(false);
 
   useEffect(() => {
     const userStr = localStorage.getItem('user');
+
     if (!userStr) {
       router.push('/auth/paramedic/signup');
       return;
     }
+
     const user = JSON.parse(userStr);
     const id = user.id || user.paramedic_id || user.user_id;
+
     setParamedicId(id);
   }, [router]);
+
+  useEffect(() => {
+    if (!paramedicId) return;
+
+    const loadParamedicDetails = async () => {
+      const { data, error } = await supabase
+        .from('paramedics')
+        .select('vehicle_type, vehicle_registration')
+        .eq('id', paramedicId)
+        .single();
+
+      if (error) {
+        console.error('[PARAMEDIC DETAILS] Error:', error.message);
+        return;
+      }
+
+      if (data?.vehicle_type) {
+        setVehicleType(data.vehicle_type);
+      }
+
+      if (data?.vehicle_registration) {
+        setVehicleRegistration(data.vehicle_registration);
+      }
+    };
+
+    loadParamedicDetails();
+  }, [paramedicId]);
 
   // GPS watcher — updates DB directly (paramedic home doesn't have a JWT token,
   // so we write to Supabase directly here; update-location API used in active-ride)
@@ -39,17 +79,32 @@ export default function ParamedicHome() {
     const watchId = navigator.geolocation.watchPosition(
       async (pos) => {
         const { latitude, longitude } = pos.coords;
-        setCurrentPos({ lat: latitude, lng: longitude });
+
+        setCurrentPos({
+          lat: latitude,
+          lng: longitude,
+        });
 
         const { error } = await supabase
           .from('paramedics')
-          .update({ current_lat: latitude, current_lng: longitude, is_online: true })
+          .update({
+            current_lat: latitude,
+            current_lng: longitude,
+            lat: latitude,
+            lng: longitude,
+            is_online: true,
+          })
           .eq('id', paramedicId);
 
-        if (error) console.error('[GPS] DB sync error:', error.message);
+        if (error) {
+          console.error('[GPS] DB sync error:', error.message);
+        }
       },
       (err) => console.error('[GPS] Error:', err.message),
-      { enableHighAccuracy: true, maximumAge: 0 }
+      {
+        enableHighAccuracy: true,
+        maximumAge: 0,
+      }
     );
 
     return () => navigator.geolocation.clearWatch(watchId);
@@ -69,7 +124,6 @@ export default function ParamedicHome() {
 
       if (data && data.length > 0) {
         setIncomingRide(data[0]);
-        new Audio('/emergency_alert.mp3').play().catch(() => {});
       }
     }, 2000);
 
@@ -78,11 +132,15 @@ export default function ParamedicHome() {
 
   const toggleStatus = async () => {
     const nextStatus = !isOnline;
+
     setIsOnline(nextStatus);
+
     if (paramedicId) {
       await supabase
         .from('paramedics')
-        .update({ is_online: nextStatus })
+        .update({
+          is_online: nextStatus,
+        })
         .eq('id', paramedicId);
     }
   };
@@ -91,15 +149,19 @@ export default function ParamedicHome() {
 
   const acceptRide = async () => {
     if (!incomingRide || !paramedicId) return;
+
     // Hard guard against double-tap
     if (isAccepting.current) return;
+
     isAccepting.current = true;
     setActionLoading('accept');
 
     try {
       const res = await fetch('/api/paramedic/accept-ride', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
           request_id: incomingRide.id,
           paramedic_id: paramedicId,
@@ -114,6 +176,7 @@ export default function ParamedicHome() {
           setIncomingRide(null);
           return;
         }
+
         throw new Error(data.error || 'Accept failed');
       }
 
@@ -129,13 +192,16 @@ export default function ParamedicHome() {
 
   const rejectRide = async () => {
     if (!incomingRide || !paramedicId) return;
+
     setActionLoading('reject');
 
     try {
       // Unassign the paramedic from this ride so smart-match can try another
       const { error } = await supabase
         .from('rides')
-        .update({ paramedic_id: null })
+        .update({
+          paramedic_id: null,
+        })
         .eq('id', incomingRide.id)
         .eq('status', 'searching');
 
@@ -151,18 +217,46 @@ export default function ParamedicHome() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] p-4 bg-slate-950 text-white">
+    <div className="flex flex-col h-[calc(100vh-4rem)] p-4 bg-secondary text-ink">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-2xl font-bold italic tracking-tighter">COMMAND CENTER</h1>
-          <p className={`text-xs font-black ${isOnline ? 'text-green-500' : 'text-red-500'}`}>
-            {isOnline ? '● UPLINK ACTIVE' : '○ UPLINK OFFLINE'}
+          <p className="text-xs font-mono uppercase tracking-widest text-dark/50 mb-0.5">
+            Paramedic Side
           </p>
+
+          <h1 className="text-2xl font-bold text-ink">
+            Paramedic Dashboard
+          </h1>
+
+          <div className="flex flex-wrap items-center gap-2 mt-2">
+            <span
+              className={`text-xs font-bold px-2.5 py-1 rounded-full border ${
+                isOnline
+                  ? 'bg-green-100 text-green-700 border-green-200'
+                  : 'bg-red-100 text-red-700 border-red-200'
+              }`}
+            >
+              {isOnline ? 'Available for Dispatch' : 'Offline'}
+            </span>
+
+            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-paper border border-primary/20 text-dark">
+              {vehicleType}
+            </span>
+
+            {vehicleRegistration && (
+              <span className="text-xs font-mono px-2.5 py-1 rounded-full bg-paper border border-primary/20 text-dark/70">
+                {vehicleRegistration}
+              </span>
+            )}
+          </div>
         </div>
+
         <button
           onClick={toggleStatus}
-          className={`px-8 py-3 rounded-xl font-black transition-all ${
-            isOnline ? 'bg-red-600 shadow-lg shadow-red-900/20' : 'bg-green-600'
+          className={`px-8 py-3 rounded-xl font-black transition-all shadow-warm ${
+            isOnline
+              ? 'bg-accent hover:bg-red-700 text-white'
+              : 'bg-primary hover:bg-ink text-white'
           }`}
         >
           <Power className="inline mr-2" />
@@ -171,61 +265,77 @@ export default function ParamedicHome() {
       </div>
 
       {latestNotification && !incomingRide && (
-  <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-2xl p-4">
-    <p className="text-xs font-black uppercase tracking-widest text-red-400">
-      Live Notification
-    </p>
-    <p className="text-sm font-bold text-white mt-1">
-      {latestNotification.title}
-    </p>
-    <p className="text-xs text-slate-300 mt-1">
-      {latestNotification.body}
-    </p>
-  </div>
-)}
+        <div className="mb-4 bg-accent/10 border border-accent/20 rounded-2xl p-4">
+          <p className="text-xs font-black uppercase tracking-widest text-accent">
+            Live Notification
+          </p>
 
-      <div className="flex-1 relative rounded-[2rem] overflow-hidden border border-slate-800 bg-slate-900 flex items-center justify-center">
+          <p className="text-sm font-bold text-ink mt-1">
+            {latestNotification.title}
+          </p>
+
+          <p className="text-xs text-dark mt-1">
+            {latestNotification.body}
+          </p>
+        </div>
+      )}
+
+      <div className="flex-1 relative rounded-[2rem] overflow-hidden border border-primary/20 bg-paper flex items-center justify-center shadow-warm">
         {isOnline ? (
           <Map
             patientLat={incomingRide?.pickup_lat || currentPos.lat}
             patientLng={incomingRide?.pickup_lng || currentPos.lng}
             paramedicLat={currentPos.lat}
             paramedicLng={currentPos.lng}
+            showRoute={!!incomingRide}
           />
         ) : (
-          <div className="text-center opacity-20">
-            <Navigation className="h-16 w-16 mx-auto mb-2" />
-            <p className="font-black text-xs uppercase tracking-widest">GPS Standby</p>
+          <div className="text-center opacity-40">
+            <Navigation className="h-16 w-16 mx-auto mb-2 text-primary" />
+            <p className="font-black text-xs uppercase tracking-widest text-dark">
+              Location standby
+            </p>
           </div>
         )}
 
         {incomingRide && (
-          <div className="absolute inset-0 z-50 bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-6 text-center">
-            <div className="bg-slate-900 border-t-8 border-red-600 rounded-[3rem] p-10 w-full max-w-sm shadow-2xl">
-              <AlertTriangle className="h-16 w-16 text-red-500 mx-auto mb-4 animate-bounce" />
-              <h3 className="text-3xl font-black mb-2 italic">NEW EMERGENCY</h3>
-              <p className="text-slate-400 font-bold mb-2 uppercase text-sm tracking-widest">
+          <div className="absolute inset-0 z-50 bg-ink/40 backdrop-blur-md flex items-center justify-center p-6 text-center">
+            <div className="bg-paper border-t-8 border-accent rounded-[3rem] p-10 w-full max-w-sm shadow-2xl">
+              <AlertTriangle className="h-16 w-16 text-accent mx-auto mb-4 animate-bounce" />
+
+              <h3 className="text-3xl font-black mb-2 text-ink">
+                New Emergency
+              </h3>
+
+              <p className="text-dark font-bold mb-2 uppercase text-sm tracking-widest">
                 {incomingRide.emergency_type || 'Medical Emergency'}
               </p>
-              <p className="text-slate-500 text-xs mb-8">
+
+              <p className="text-dark/60 text-xs mb-3">
                 Severity: {incomingRide.severity || 'Unknown'}
               </p>
+
+              <div className="mb-8 flex items-center justify-center gap-2 text-xs text-dark/70">
+                <Ambulance className="h-4 w-4 text-primary" />
+                <span>{vehicleType}</span>
+              </div>
 
               <div className="flex gap-3">
                 <button
                   onClick={rejectRide}
                   disabled={actionLoading !== null}
-                  className="flex-1 py-4 bg-slate-700 hover:bg-slate-600 rounded-2xl font-black text-lg disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="flex-1 py-4 bg-dark/10 hover:bg-dark/20 text-ink rounded-2xl font-black text-lg disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   <X className="h-5 w-5" />
                   {actionLoading === 'reject' ? '...' : 'REJECT'}
                 </button>
+
                 <button
                   onClick={acceptRide}
                   disabled={actionLoading !== null}
-                  className="flex-2 flex-1 py-4 bg-green-600 hover:bg-green-500 rounded-2xl font-black text-lg shadow-xl active:scale-95 disabled:opacity-50"
+                  className="flex-1 py-4 bg-primary hover:bg-ink text-white rounded-2xl font-black text-lg shadow-xl active:scale-95 disabled:opacity-50"
                 >
-                  {actionLoading === 'accept' ? 'SYNCING...' : 'ACCEPT ✓'}
+                  {actionLoading === 'accept' ? 'ACCEPTING...' : 'ACCEPT ✓'}
                 </button>
               </div>
             </div>

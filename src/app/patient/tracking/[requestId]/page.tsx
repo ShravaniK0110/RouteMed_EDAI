@@ -8,7 +8,9 @@ import {
   CheckCircle2,
   Clock,
   Navigation,
-  Route
+  Route,
+  Hospital,
+  ReceiptText,
 } from 'lucide-react';
 
 const Map = dynamic<any>(
@@ -25,6 +27,13 @@ type RouteInfo = {
   distanceKm: number;
   etaMinutes: number;
 };
+
+type RideStatus =
+  | 'searching'
+  | 'accepted'
+  | 'picked_up'
+  | 'completed'
+  | 'cancelled';
 
 export default function PatientTrackingPage({
   params,
@@ -45,8 +54,20 @@ export default function PatientTrackingPage({
       lng: 0,
     });
 
+  const [hospitalLoc, setHospitalLoc] =
+    useState<Location>({
+      lat: 0,
+      lng: 0,
+    });
+
+  const [hospitalName, setHospitalName] =
+    useState<string>('Destination hospital');
+
   const [paramedicId, setParamedicId] =
     useState<string | null>(null);
+
+  const [rideStatus, setRideStatus] =
+    useState<RideStatus>('accepted');
 
   const [rideCompleted, setRideCompleted] =
     useState(false);
@@ -57,6 +78,8 @@ export default function PatientTrackingPage({
   const [routeInfo, setRouteInfo] =
     useState<RouteInfo | null>(null);
 
+  const estimatedFare = 125;
+
   const hasPatientLocation =
     patientLoc.lat !== 0 &&
     patientLoc.lng !== 0;
@@ -65,14 +88,21 @@ export default function PatientTrackingPage({
     paramedicLoc.lat !== 0 &&
     paramedicLoc.lng !== 0;
 
-  // 1. Fetch initial ride + paramedic data
+  const hasHospitalLocation =
+    hospitalLoc.lat !== 0 &&
+    hospitalLoc.lng !== 0;
+
+  const isPickedUp =
+    rideStatus === 'picked_up';
+
+  // 1. Fetch initial ride + paramedic + hospital data
   useEffect(() => {
     const fetchInitialData = async () => {
       const { data: ride, error: rideError } =
         await supabase
           .from('rides')
           .select(
-            'pickup_lat, pickup_lng, paramedic_id, status'
+            'pickup_lat, pickup_lng, paramedic_id, hospital_id, status'
           )
           .eq('id', params.requestId)
           .single();
@@ -86,10 +116,18 @@ export default function PatientTrackingPage({
         return;
       }
 
+      if (ride.status) {
+        setRideStatus(ride.status as RideStatus);
+      }
+
       if (ride.status === 'completed') {
-        router.push(
-          `/patient/rating?rideId=${params.requestId}`
-        );
+        setRideCompleted(true);
+
+        setTimeout(() => {
+          router.push(
+            `/patient/rating?rideId=${params.requestId}`
+          );
+        }, 3500);
 
         return;
       }
@@ -98,6 +136,35 @@ export default function PatientTrackingPage({
         lat: Number(ride.pickup_lat),
         lng: Number(ride.pickup_lng),
       });
+
+      if (ride.hospital_id) {
+        const { data: hospital, error: hospitalError } =
+          await supabase
+            .from('hospitals')
+            .select(
+              'name, latitude, longitude'
+            )
+            .eq('id', ride.hospital_id)
+            .single();
+
+        if (hospitalError) {
+          console.error(
+            '[PATIENT TRACKING] Hospital fetch error:',
+            hospitalError
+          );
+        }
+
+        if (hospital) {
+          setHospitalName(
+            hospital.name || 'Destination hospital'
+          );
+
+          setHospitalLoc({
+            lat: Number(hospital.latitude),
+            lng: Number(hospital.longitude),
+          });
+        }
+      }
 
       if (ride.paramedic_id) {
         setParamedicId(ride.paramedic_id);
@@ -188,7 +255,7 @@ export default function PatientTrackingPage({
     };
   }, [paramedicId]);
 
-  // 3. Listen for ride completion
+  // 3. Listen for ride status changes
   useEffect(() => {
     const rideChannel = supabase
       .channel(
@@ -203,17 +270,22 @@ export default function PatientTrackingPage({
           filter: `id=eq.${params.requestId}`,
         },
         (payload) => {
-          if (
-            payload.new?.status ===
-            'completed'
-          ) {
+          const newStatus =
+            payload.new?.status as RideStatus | undefined;
+
+          if (!newStatus) return;
+
+          setRideStatus(newStatus);
+          setRouteInfo(null);
+
+          if (newStatus === 'completed') {
             setRideCompleted(true);
 
             setTimeout(() => {
               router.push(
                 `/patient/rating?rideId=${params.requestId}`
               );
-            }, 2000);
+            }, 3500);
           }
         }
       )
@@ -226,16 +298,40 @@ export default function PatientTrackingPage({
 
   if (rideCompleted) {
     return (
-      <div className="h-screen flex flex-col items-center justify-center bg-[#231815] gap-4">
+      <div className="h-screen flex flex-col items-center justify-center bg-[#231815] gap-5 px-6 text-center">
         <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-green-500/20">
           <CheckCircle2 className="h-10 w-10 text-green-400" />
         </div>
 
-        <h2 className="text-2xl font-bold text-white">
-          Ride Completed!
-        </h2>
+        <div>
+          <h2 className="text-3xl font-black text-white">
+            Ride Completed
+          </h2>
 
-        <p className="text-white/50">
+          <p className="text-white/50 mt-1">
+            Your ambulance trip has been completed successfully.
+          </p>
+        </div>
+
+        <div className="bg-white/10 border border-white/10 rounded-2xl p-5 w-full max-w-sm">
+          <div className="flex items-center justify-center gap-2 mb-2">
+            <ReceiptText className="h-5 w-5 text-[#b86b52]" />
+
+            <p className="text-xs uppercase tracking-[0.2em] text-white/50">
+              Payment Summary
+            </p>
+          </div>
+
+          <p className="text-4xl font-black text-white">
+            ₹{estimatedFare}
+          </p>
+
+          <p className="text-sm text-green-300 mt-2">
+            Payment recorded for demo
+          </p>
+        </div>
+
+        <p className="text-white/40 text-sm">
           Taking you to the rating screen...
         </p>
       </div>
@@ -251,20 +347,30 @@ export default function PatientTrackingPage({
           </p>
 
           <h1 className="text-3xl font-black text-[#231815]">
-            Ambulance En Route
+            {isPickedUp
+              ? 'En Route to Hospital'
+              : 'Ambulance En Route'}
           </h1>
+
+          {isPickedUp && (
+            <p className="text-sm text-black/50 mt-1">
+              Destination: {hospitalName}
+            </p>
+          )}
         </div>
 
         <div className="flex items-center gap-2 text-sm text-[#231815] bg-white border border-black/10 rounded-full px-4 py-2 shadow-sm w-fit">
           <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
 
           {hasParamedicLocation
-            ? `${paramedicName} is moving`
+            ? isPickedUp
+              ? `${paramedicName} is heading to hospital`
+              : `${paramedicName} is moving`
             : 'Waiting for ambulance GPS'}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div className="bg-white border border-black/10 rounded-2xl p-4 flex items-center gap-3">
           <div className="h-10 w-10 rounded-xl bg-[#b86b52]/10 flex items-center justify-center">
             <Clock className="h-5 w-5 text-[#b86b52]" />
@@ -304,6 +410,22 @@ export default function PatientTrackingPage({
             </p>
           </div>
         </div>
+
+        <div className="bg-white border border-black/10 rounded-2xl p-4 flex items-center gap-3">
+          <div className="h-10 w-10 rounded-xl bg-green-100 flex items-center justify-center">
+            <Hospital className="h-5 w-5 text-green-700" />
+          </div>
+
+          <div>
+            <p className="text-xs text-black/45">
+              Current Phase
+            </p>
+
+            <p className="text-xl font-black text-[#231815]">
+              {isPickedUp ? 'Hospital' : 'Pickup'}
+            </p>
+          </div>
+        </div>
       </div>
 
       <div className="flex-1 bg-white rounded-2xl overflow-hidden border border-black/10 shadow-xl relative min-h-[350px]">
@@ -313,10 +435,24 @@ export default function PatientTrackingPage({
             patientLng={patientLoc.lng}
             paramedicLat={paramedicLoc.lat}
             paramedicLng={paramedicLoc.lng}
+            hospitalLat={
+              hasHospitalLocation
+                ? hospitalLoc.lat
+                : undefined
+            }
+            hospitalLng={
+              hasHospitalLocation
+                ? hospitalLoc.lng
+                : undefined
+            }
             showRoute={hasParamedicLocation}
+            showHospital={
+              isPickedUp &&
+              hasHospitalLocation
+            }
             onRouteInfo={(info: RouteInfo) => {
-  setRouteInfo(info);
-}}
+              setRouteInfo(info);
+            }}
           />
         ) : (
           <div className="absolute inset-0 flex flex-col gap-3 items-center justify-center bg-[#faf7f3]">

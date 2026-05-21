@@ -8,47 +8,101 @@ import { validateBody, UpdateLocationSchema } from '@/lib/validation';
 
 export async function POST(req: Request) {
   const authHeader = req.headers.get('authorization');
-  const user       = verifyAuthHeader(authHeader);
-  if (!user) return apiError('UNAUTHORIZED', 'Unauthorized');
 
-  const { data: body, error: validationError } = await validateBody(req, UpdateLocationSchema);
-  if (validationError) return validationError;
+  const user = verifyAuthHeader(authHeader);
+
+  if (!user) {
+    return apiError('UNAUTHORIZED', 'Unauthorized');
+  }
+
+  const {
+    data: body,
+    error: validationError,
+  }: {
+    data: any;
+    error: any;
+  } = await validateBody(
+    req,
+    UpdateLocationSchema
+  );
+
+  if (validationError) {
+    return validationError;
+  }
 
   try {
-    const { paramedic_id, latitude, longitude } = body;
+    const {
+      paramedic_id,
+      latitude,
+      longitude,
+    } = body;
 
-    if (user.id !== paramedic_id && user.role !== 'admin') {
-      return apiError('FORBIDDEN', 'You cannot update another paramedic location');
+    if (!paramedic_id || latitude === undefined || longitude === undefined) {
+      return apiError(
+        'BAD_REQUEST',
+        'Missing paramedic_id, latitude, or longitude'
+      );
     }
 
-    const { data: paramedic, error: fetchError } = await supabase
+    if (
+      user.id !== paramedic_id &&
+      user.role !== 'admin'
+    ) {
+      return apiError(
+        'FORBIDDEN',
+        'You cannot update another paramedic location'
+      );
+    }
+
+    const {
+      data: paramedic,
+      error: fetchError,
+    } = await supabase
       .from('paramedics')
       .select('id')
       .eq('id', paramedic_id)
       .single();
 
     if (fetchError || !paramedic) {
-      return apiError('NOT_FOUND', 'Paramedic not found');
+      return apiError(
+        'NOT_FOUND',
+        'Paramedic not found'
+      );
     }
 
-    const { error: updateError } = await supabase
+    const {
+      error: updateError,
+    } = await supabase
       .from('paramedics')
       .update({
         current_lat: latitude,
         current_lng: longitude,
-        is_online:   true,
-        updated_at:  new Date().toISOString(),
+        lat: latitude,
+        lng: longitude,
+        is_online: true,
       })
       .eq('id', paramedic_id);
 
     if (updateError) {
-      console.error('[LOCATION UPDATE ERROR]', updateError);
+      console.error(
+        '[LOCATION UPDATE ERROR]',
+        updateError
+      );
+
       throw updateError;
     }
 
-    return NextResponse.json({ success: true, paramedic_id, latitude, longitude });
+    return NextResponse.json({
+      success: true,
+      paramedic_id,
+      latitude,
+      longitude,
+    });
 
   } catch (err: unknown) {
-    return apiCatchError(err, 'UPDATE_LOCATION');
+    return apiCatchError(
+      err,
+      'UPDATE_LOCATION'
+    );
   }
 }
