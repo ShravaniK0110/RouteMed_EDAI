@@ -87,7 +87,7 @@ export default function ParamedicHome() {
     }
   };
 
-  const notifications = useNotifications(paramedicId);
+  const { latestNotification } = useNotifications(paramedicId);
 
   const acceptRide = async () => {
     if (!incomingRide || !paramedicId) return;
@@ -169,6 +169,20 @@ export default function ParamedicHome() {
           {isOnline ? 'GO OFFLINE' : 'GO ONLINE'}
         </button>
       </div>
+
+      {latestNotification && !incomingRide && (
+  <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-2xl p-4">
+    <p className="text-xs font-black uppercase tracking-widest text-red-400">
+      Live Notification
+    </p>
+    <p className="text-sm font-bold text-white mt-1">
+      {latestNotification.title}
+    </p>
+    <p className="text-xs text-slate-300 mt-1">
+      {latestNotification.body}
+    </p>
+  </div>
+)}
 
       <div className="flex-1 relative rounded-[2rem] overflow-hidden border border-slate-800 bg-slate-900 flex items-center justify-center">
         {isOnline ? (

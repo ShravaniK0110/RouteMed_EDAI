@@ -1,23 +1,11 @@
 export const dynamic = "force-dynamic";
+
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
-import { verifyJWT } from '@/lib/auth';
-import { apiError, apiCatchError } from '@/lib/api-error';
+import { apiCatchError } from '@/lib/api-error';
 
-export async function GET(req: Request) {
+export async function GET() {
   try {
-    const authHeader = req.headers.get('authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return apiError('UNAUTHORIZED', 'Missing token');
-    }
-
-    const token = authHeader.split(' ')[1];
-    const decoded = verifyJWT(token);
-
-    if (!decoded || decoded.role !== 'admin') {
-      return apiError('FORBIDDEN', 'Admin access required');
-    }
-
     const { data: rides, error } = await supabase
       .from('rides')
       .select(`
@@ -31,16 +19,18 @@ export async function GET(req: Request) {
       .limit(100);
 
     if (error) {
-      console.error('Supabase Error:', error);
-      throw new Error('Database query failed');
+      console.error('[ADMIN RIDES] Supabase Error:', error);
+      throw error;
     }
 
     return NextResponse.json({
       success: true,
-      rides: rides.map(ride => ({
+      rides: (rides || []).map((ride: any) => ({
         ...ride,
-        paramedic_name: ride.paramedics?.full_name || 'Unassigned',
-        vehicle: ride.paramedics?.vehicle_registration || 'N/A',
+        paramedic_name:
+          ride.paramedics?.full_name || 'Unassigned',
+        vehicle:
+          ride.paramedics?.vehicle_registration || 'N/A',
       })),
     });
 

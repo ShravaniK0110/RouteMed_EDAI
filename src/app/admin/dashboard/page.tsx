@@ -1,8 +1,23 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Users, Truck, Building2, BrainCircuit, Activity, Clock, RefreshCw, AlertTriangle } from 'lucide-react'
+
+import {
+  Users,
+  Truck,
+  Building2,
+  Activity,
+  RefreshCw,
+  AlertTriangle
+} from 'lucide-react'
+
+import {
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  ResponsiveContainer,
+} from 'recharts'
 
 interface DashboardStats {
   active_rides: number
@@ -10,118 +25,233 @@ interface DashboardStats {
   total_users: number
   platform_revenue: string
 }
-interface CriticalRide { id: string; status: string; severity: string; paramedic: string }
-interface PendingApproval { id: string; name: string; vehicle: string }
+
+interface CriticalRide {
+  id: string
+  status: string
+  severity: string
+  paramedic: string
+}
 
 const STATUS_STYLE: Record<string, string> = {
   searching: 'bg-yellow-100 text-yellow-700 border-yellow-200',
-  accepted:  'bg-blue-100 text-blue-700 border-blue-200',
+  accepted: 'bg-blue-100 text-blue-700 border-blue-200',
   completed: 'bg-green-100 text-green-700 border-green-200',
   cancelled: 'bg-red-100 text-red-700 border-red-200',
 }
 
+const emergencyDistribution = [
+  { name: 'Medical', value: 45 },
+  { name: 'Accident', value: 25 },
+  { name: 'Cardiac', value: 15 },
+  { name: 'Trauma', value: 15 },
+]
+
 export default function AdminDashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
+
   const [criticalRides, setCriticalRides] = useState<CriticalRide[]>([])
-  const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([])
-  const [mlStats, setMlStats] = useState({ accuracy: '—', count: 0 })
+
   const [loading, setLoading] = useState(true)
+
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
 
   const fetchAll = useCallback(async () => {
+
     setLoading(true)
+
     try {
-      const [dashRes, mlRes] = await Promise.all([fetch('/api/admin/dashboard'), fetch('/api/ml/model-stats')])
-      const dash = await dashRes.json()
-      const ml = await mlRes.json()
-      if (dash.success) { setStats(dash.stats); setCriticalRides(dash.recent_critical_rides || []); setPendingApprovals(dash.pending_approvals || []) }
-      if (ml.success) setMlStats({ accuracy: ml.accuracy, count: ml.count })
+
+      const dashRes =
+        await fetch('/api/admin/dashboard')
+
+      const dash =
+        await dashRes.json()
+
+      if (dash.success) {
+
+        setStats(dash.stats)
+
+        setCriticalRides(
+          dash.recent_critical_rides || []
+        )
+      }
+
       setLastUpdated(new Date())
+
     } catch (err) {
-      console.error('Dashboard fetch error:', err)
+
+      console.error(
+        'Dashboard fetch error:',
+        err
+      )
+
     } finally {
+
       setLoading(false)
     }
+
   }, [])
 
   useEffect(() => {
+
     fetchAll()
-    const interval = setInterval(fetchAll, 30000)
-    return () => clearInterval(interval)
+
+    const interval =
+      setInterval(fetchAll, 30000)
+
+    return () =>
+      clearInterval(interval)
+
   }, [fetchAll])
 
   const statCards = [
-    { label: 'Active Rides', value: stats?.active_rides ?? '—', Icon: Activity, color: 'text-accent', bg: 'bg-accent/10', pulse: (stats?.active_rides ?? 0) > 0 },
-    { label: 'Online Paramedics', value: stats?.online_paramedics ?? '—', Icon: Truck, color: 'text-primary', bg: 'bg-primary/10' },
-    { label: 'Registered Patients', value: stats?.total_users ?? '—', Icon: Users, color: 'text-ink', bg: 'bg-ink/10' },
-    { label: 'ML Accuracy', value: mlStats.accuracy !== '—' ? `${mlStats.accuracy}%` : '—', Icon: BrainCircuit, color: 'text-green-700', bg: 'bg-green-100', sub: mlStats.count > 0 ? `${mlStats.count} predictions` : undefined },
+    {
+      label: 'Active Rides',
+      value: stats?.active_rides ?? '—',
+      Icon: Activity,
+      color: 'text-red-500',
+      bg: 'bg-red-100',
+    },
+    {
+      label: 'Online Paramedics',
+      value: stats?.online_paramedics ?? '—',
+      Icon: Truck,
+      color: 'text-[#b86b52]',
+      bg: 'bg-[#b86b52]/10',
+    },
+    {
+      label: 'Registered Patients',
+      value: stats?.total_users ?? '—',
+      Icon: Users,
+      color: 'text-slate-700',
+      bg: 'bg-slate-200',
+    },
   ]
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-6xl mx-auto space-y-6">
+
       <div className="flex items-center justify-between">
+
         <div>
-          <p className="text-xs font-mono uppercase tracking-widest text-dark/50 mb-0.5">Admin</p>
-          <h1 className="text-2xl font-bold text-ink">Operations Dashboard</h1>
+          <p className="text-xs uppercase tracking-[0.25em] text-[#b86b52]/70 mb-1">
+            Admin
+          </p>
+
+          <h1 className="text-4xl font-black text-[#231815] leading-tight">
+            Operations Dashboard
+          </h1>
         </div>
+
         <div className="flex items-center gap-3">
-          {lastUpdated && <span className="text-xs font-mono text-dark/40 hidden sm:block">{lastUpdated.toLocaleTimeString()}</span>}
-          <button onClick={fetchAll}
-            className="flex items-center gap-2 px-3 py-2 bg-paper border border-primary/20 rounded-lg text-sm text-dark hover:border-primary transition-colors">
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
+
+          {lastUpdated && (
+            <span className="text-xs text-black/40 hidden sm:block">
+              {lastUpdated.toLocaleTimeString()}
+            </span>
+          )}
+
+          <button
+            onClick={fetchAll}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-black/10 hover:border-[#b86b52]/30 transition-all"
+          >
+            <RefreshCw
+              className={`h-4 w-4 ${
+                loading
+                  ? 'animate-spin'
+                  : ''
+              }`}
+            />
+
+            <span className="text-sm font-semibold">
+              Refresh
+            </span>
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+
         {statCards.map((card) => (
-          <div key={card.label} className="bg-paper border border-primary/20 rounded-xl p-5">
-            <div className="flex items-center justify-between mb-3">
-              <div className={`w-9 h-9 ${card.bg} rounded-lg flex items-center justify-center`}>
+
+          <div
+            key={card.label}
+            className="bg-white border border-black/10 rounded-2xl p-6"
+          >
+            <div className="flex items-center justify-between mb-4">
+
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${card.bg}`}>
                 <card.Icon className={`h-5 w-5 ${card.color}`} />
               </div>
-              {card.pulse && (
-                <span className="flex items-center gap-1 text-[10px] text-accent font-bold font-mono uppercase">
-                  <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" /> Live
-                </span>
-              )}
+
             </div>
-            <p className="text-xs text-dark/60 font-medium">{card.label}</p>
-            <h3 className="text-2xl font-black text-ink mt-0.5 font-mono">
-              {loading ? <span className="text-dark/20">—</span> : card.value}
+
+            <p className="text-sm text-black/50 font-medium">
+              {card.label}
+            </p>
+
+            <h3 className="text-4xl font-black text-[#231815] mt-2">
+              {loading ? '—' : card.value}
             </h3>
-            {card.sub && <p className="text-[10px] text-dark/40 mt-0.5 font-mono">{card.sub}</p>}
           </div>
         ))}
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
-        <div className="bg-paper border border-primary/20 rounded-xl overflow-hidden">
-          <div className="px-5 py-4 border-b border-primary/10 flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-accent" />
-            <h2 className="font-semibold text-ink text-sm">Recent Critical Rides</h2>
+
+        <div className="bg-white border border-black/10 rounded-2xl overflow-hidden">
+
+          <div className="px-5 py-4 border-b border-black/5 flex items-center gap-2">
+
+            <AlertTriangle className="h-4 w-4 text-red-500" />
+
+            <h2 className="font-bold text-[#231815]">
+              Recent Critical Rides
+            </h2>
           </div>
-          <div className="divide-y divide-primary/10">
+
+          <div className="divide-y divide-black/5">
+
             {loading ? (
-              <div className="flex items-center justify-center py-10">
-                <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+
+              <div className="flex items-center justify-center py-12">
+                <div className="w-5 h-5 border-2 border-[#b86b52] border-t-transparent rounded-full animate-spin" />
               </div>
+
             ) : criticalRides.length === 0 ? (
-              <p className="text-center text-dark/40 py-10 text-sm font-mono">No critical rides yet</p>
+
+              <p className="text-center text-black/40 py-12">
+                No critical rides yet
+              </p>
+
             ) : (
+
               criticalRides.map((ride) => (
-                <div key={ride.id} className="px-5 py-3.5 hover:bg-white/60 transition-colors">
+
+                <div
+                  key={ride.id}
+                  className="px-5 py-4"
+                >
                   <div className="flex items-center justify-between">
-                    <p className="text-sm font-semibold text-ink">
-                      {ride.paramedic !== 'Unassigned' ? ride.paramedic : 'Awaiting dispatch'}
+
+                    <p className="font-semibold text-[#231815]">
+                      {ride.paramedic !== 'Unassigned'
+                        ? ride.paramedic
+                        : 'Awaiting dispatch'}
                     </p>
-                    <span className={`px-2 py-0.5 text-[10px] font-bold rounded border font-mono ${STATUS_STYLE[ride.status] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+
+                    <span
+                      className={`px-2 py-1 rounded-lg text-xs font-bold border ${
+                        STATUS_STYLE[ride.status]
+                      }`}
+                    >
                       {ride.status.toUpperCase()}
                     </span>
                   </div>
-                  <p className="text-xs text-dark/50 mt-0.5 font-mono">
-                    {ride.id.slice(0, 8)}… · {ride.severity}
+
+                  <p className="text-xs text-black/40 mt-1">
+                    {ride.id.slice(0, 8)} • {ride.severity}
                   </p>
                 </div>
               ))
@@ -129,49 +259,65 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        <div className="bg-paper border border-primary/20 rounded-xl overflow-hidden">
-          <div className="px-5 py-4 border-b border-primary/10 flex items-center gap-2">
-            <Clock className="h-4 w-4 text-dark" />
-            <h2 className="font-semibold text-ink text-sm">Pending Approvals</h2>
-            {pendingApprovals.length > 0 && (
-              <span className="ml-auto text-[10px] bg-yellow-100 text-yellow-700 border border-yellow-200 px-2 py-0.5 rounded font-bold font-mono">
-                {pendingApprovals.length}
-              </span>
-            )}
+        <div className="bg-white border border-black/10 rounded-2xl p-5">
+
+          <div className="flex items-center gap-2 mb-4">
+
+            <Activity className="h-4 w-4 text-[#b86b52]" />
+
+            <h2 className="font-bold text-[#231815]">
+              Emergency Distribution
+            </h2>
           </div>
-          <div className="divide-y divide-primary/10">
-            {loading ? (
-              <div className="flex items-center justify-center py-10">
-                <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-              </div>
-            ) : pendingApprovals.length === 0 ? (
-              <p className="text-center text-dark/40 py-10 text-sm font-mono">All paramedics verified ✓</p>
-            ) : (
-              pendingApprovals.map((p) => (
-                <div key={p.id} className="px-5 py-3.5 hover:bg-white/60 transition-colors flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-semibold text-ink">{p.name}</p>
-                    <p className="text-xs text-dark/50 mt-0.5 font-mono">{p.vehicle || 'No vehicle registered'}</p>
-                  </div>
-                  <button className="text-xs font-bold border border-primary/30 bg-primary/5 text-primary hover:bg-primary hover:text-white px-3 py-1.5 rounded-lg transition-colors">
-                    Review
-                  </button>
-                </div>
-              ))
-            )}
+
+          <div className="h-72 w-full">
+
+            <ResponsiveContainer width="100%" height="100%">
+
+              <PieChart>
+
+                <Pie
+                  data={emergencyDistribution}
+                  dataKey="value"
+                  outerRadius={90}
+                  label
+                >
+                  <Cell fill="#2563eb" />
+                  <Cell fill="#dc2626" />
+                  <Cell fill="#16a34a" />
+                  <Cell fill="#ca8a04" />
+                </Pie>
+
+                <Tooltip />
+
+              </PieChart>
+
+            </ResponsiveContainer>
           </div>
         </div>
       </div>
 
       {stats?.platform_revenue && (
-        <div className="bg-ink rounded-xl p-6 flex items-center justify-between">
+
+        <div className="bg-[#231815] rounded-2xl p-7 flex items-center justify-between">
+
           <div>
-            <p className="text-white/50 text-xs font-mono uppercase tracking-widest mb-1">Platform Revenue · 15% fee</p>
-            <h3 className="text-3xl font-black text-white font-mono">
-              ₹ {Number(stats.platform_revenue).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+
+            <p className="text-white/40 text-xs uppercase tracking-[0.2em] mb-2">
+              Platform Revenue
+            </p>
+
+            <h3 className="text-4xl font-black text-white">
+              ₹{' '}
+              {Number(
+                stats.platform_revenue
+              ).toLocaleString('en-IN', {
+                minimumFractionDigits: 2,
+              })}
             </h3>
           </div>
-          <Building2 className="h-10 w-10 text-primary/40" />
+
+          <Building2 className="h-10 w-10 text-[#b86b52]" />
         </div>
       )}
     </div>

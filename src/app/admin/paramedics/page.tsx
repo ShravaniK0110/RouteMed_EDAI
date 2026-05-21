@@ -2,18 +2,29 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Card, CardContent } from '@/components/ui/card'
-import { Truck, Search, Star, ShieldCheck, RefreshCw } from 'lucide-react'
+
+import {
+  Truck,
+  Search,
+  Star,
+  ShieldCheck,
+  RefreshCw,
+  Phone,
+  MapPin
+} from 'lucide-react'
 
 interface Paramedic {
   id: string
-  full_name: string
-  vehicle_registration: string
-  phone: string
-  is_online: boolean
-  lat: number | null
-  lng: number | null
-  average_rating: number | null
+  full_name: string | null
+  phone_number: string | null
+  vehicle_registration: string | null
+  vehicle_type: string | null
+  is_online: boolean | null
+  is_verified: boolean | null
+  rating: number | null
+  current_lat: number | null
+  current_lng: number | null
+  created_at: string | null
 }
 
 export default function AdminParamedics() {
@@ -29,11 +40,25 @@ export default function AdminParamedics() {
 
     const { data, error: dbError } = await supabase
       .from('paramedics')
-      .select('id, full_name, vehicle_registration, phone, is_online, lat, lng, average_rating')
-      .order('full_name', { ascending: true })
+      .select(`
+        id,
+        full_name,
+        phone_number,
+        vehicle_registration,
+        vehicle_type,
+        is_online,
+        is_verified,
+        rating,
+        current_lat,
+        current_lng,
+        created_at
+      `)
+      .order('created_at', { ascending: false })
 
     if (dbError) {
       setError(dbError.message)
+      setParamedics([])
+      setFiltered([])
     } else {
       setParamedics(data || [])
       setFiltered(data || [])
@@ -46,160 +71,208 @@ export default function AdminParamedics() {
     fetchParamedics()
   }, [])
 
-  // Live search filter
   useEffect(() => {
-    const q = search.toLowerCase()
+    const q = search.toLowerCase().trim()
+
+    if (!q) {
+      setFiltered(paramedics)
+      return
+    }
+
     setFiltered(
-      paramedics.filter(p =>
-        p.full_name.toLowerCase().includes(q) ||
-        p.vehicle_registration?.toLowerCase().includes(q) ||
-        p.phone?.includes(q)
+      paramedics.filter((p) =>
+        (p.full_name || '').toLowerCase().includes(q) ||
+        (p.vehicle_registration || '').toLowerCase().includes(q) ||
+        (p.vehicle_type || '').toLowerCase().includes(q) ||
+        (p.phone_number || '').includes(q)
       )
     )
   }, [search, paramedics])
 
-  // Derive status from is_online + lat/lng
-  const getStatus = (p: Paramedic) => {
-    if (!p.is_online) return 'Offline'
-    if (p.lat && p.lng) return 'Online'
-    return 'Online' // online but GPS not fired yet
-  }
-
-  const getStatusStyle = (status: string) => {
-    if (status === 'Online') return 'bg-green-500/10 border-green-500/30 text-green-400'
-    if (status === 'In Ride') return 'bg-blue-500/10 border-blue-500/30 text-blue-400'
-    return 'bg-slate-800 border-slate-700 text-slate-400'
-  }
-
-  const onlineCount = paramedics.filter(p => p.is_online).length
+  const onlineCount = paramedics.filter((p) => p.is_online).length
+  const verifiedCount = paramedics.filter((p) => p.is_verified).length
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center mb-6">
+    <div className="max-w-7xl mx-auto space-y-6">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-            <Truck className="h-8 w-8 text-blue-500" />
-            Paramedics & Fleet Management
+          <p className="text-xs uppercase tracking-[0.25em] text-[#b86b52]/70 mb-1">
+            Admin
+          </p>
+
+          <h1 className="text-4xl font-black text-[#231815] flex items-center gap-3">
+            <Truck className="h-8 w-8 text-[#b86b52]" />
+            Paramedics & Fleet
           </h1>
+
           {!loading && (
-            <p className="text-slate-400 text-sm mt-1">
-              {paramedics.length} registered · {onlineCount} online now
+            <p className="text-black/50 text-sm mt-2">
+              {paramedics.length} registered · {onlineCount} online · {verifiedCount} verified
             </p>
           )}
         </div>
+
         <button
           onClick={fetchParamedics}
-          className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg font-medium transition-colors text-sm border border-slate-700"
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-black/10 hover:border-[#b86b52]/30 transition-all w-fit"
         >
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
+
+          <span className="text-sm font-semibold">
+            Refresh
+          </span>
         </button>
       </div>
 
-      {/* Search */}
-      <div className="relative mb-6">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500" />
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-black/40" />
+
         <input
           type="text"
           value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-4 py-3 text-white focus:border-blue-500 outline-none"
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-full bg-white border border-black/10 rounded-2xl pl-11 pr-4 py-3 outline-none focus:border-[#b86b52]/40"
           placeholder="Search by name, vehicle, or phone..."
         />
       </div>
 
-      {/* Error state */}
       {error && (
-        <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 text-red-400 text-sm">
+        <div className="bg-red-100 border border-red-200 rounded-2xl p-4 text-red-600 text-sm">
           Failed to load paramedics: {error}
         </div>
       )}
 
-      {/* Table */}
-      <Card className="bg-slate-900 border-slate-800">
-        <CardContent className="p-0">
-          {loading ? (
-            <div className="flex items-center justify-center py-16">
-              <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-blue-500" />
-            </div>
-          ) : filtered.length === 0 ? (
-            <div className="text-center py-16 text-slate-500">
-              {search ? `No paramedics matching "${search}"` : 'No paramedics registered yet'}
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-800 text-slate-400 text-sm uppercase tracking-wider">
-                    <th className="p-4 font-medium">Paramedic</th>
-                    <th className="p-4 font-medium">Vehicle</th>
-                    <th className="p-4 font-medium">Phone</th>
-                    <th className="p-4 font-medium">Status</th>
-                    <th className="p-4 font-medium">Rating</th>
-                    <th className="p-4 font-medium">GPS</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800">
-                  {filtered.map((p) => {
-                    const status = getStatus(p)
-                    return (
-                      <tr key={p.id} className="hover:bg-slate-950/50 transition-colors">
-                        <td className="p-4">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center font-bold text-slate-400">
-                              {p.full_name.charAt(0).toUpperCase()}
-                            </div>
-                            <div>
-                              <p className="text-white font-bold flex items-center gap-1">
-                                {p.full_name}
-                                <ShieldCheck className="h-3 w-3 text-green-500" />
-                              </p>
-                              <p className="text-slate-500 text-xs font-mono">{p.id.slice(0, 8)}...</p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="p-4">
-                          <p className="text-slate-300 font-medium">
-                            {p.vehicle_registration || '—'}
+      <div className="bg-white border border-black/10 rounded-2xl overflow-hidden">
+        {loading ? (
+          <div className="flex items-center justify-center py-20">
+            <div className="w-8 h-8 border-2 border-[#b86b52] border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="text-center py-20 text-black/40">
+            {search
+              ? `No paramedics matching "${search}"`
+              : 'No paramedics registered yet'}
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-black/5 text-left">
+                  <th className="p-4 text-xs uppercase text-black/40">
+                    Paramedic
+                  </th>
+
+                  <th className="p-4 text-xs uppercase text-black/40">
+                    Phone
+                  </th>
+
+                  <th className="p-4 text-xs uppercase text-black/40">
+                    Vehicle
+                  </th>
+
+                  <th className="p-4 text-xs uppercase text-black/40">
+                    Status
+                  </th>
+
+                  <th className="p-4 text-xs uppercase text-black/40">
+                    Rating
+                  </th>
+
+                  <th className="p-4 text-xs uppercase text-black/40">
+                    GPS
+                  </th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {filtered.map((p) => (
+                  <tr
+                    key={p.id}
+                    className="border-b border-black/5 hover:bg-[#faf7f3] transition-colors"
+                  >
+                    <td className="p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-[#b86b52]/10 flex items-center justify-center font-bold text-[#b86b52]">
+                          {(p.full_name || 'P').charAt(0).toUpperCase()}
+                        </div>
+
+                        <div>
+                          <p className="text-[#231815] font-bold flex items-center gap-1">
+                            {p.full_name || 'Unnamed Paramedic'}
+
+                            {p.is_verified && (
+                              <ShieldCheck className="h-3 w-3 text-green-600" />
+                            )}
                           </p>
-                        </td>
-                        <td className="p-4 text-slate-300 text-sm">
-                          {p.phone || '—'}
-                        </td>
-                        <td className="p-4">
-                          <span className={`px-2.5 py-1 rounded-full text-xs font-bold border ${getStatusStyle(status)}`}>
-                            {status}
-                          </span>
-                        </td>
-                        <td className="p-4">
-                          {p.average_rating ? (
-                            <span className="flex items-center gap-1 text-white font-bold">
-                              {p.average_rating.toFixed(1)}
-                              <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
-                            </span>
-                          ) : (
-                            <span className="text-slate-500 text-sm">No ratings</span>
-                          )}
-                        </td>
-                        <td className="p-4 text-xs font-mono">
-                          {p.lat && p.lng ? (
-                            <span className="text-green-400">
-                              {p.lat.toFixed(4)}, {p.lng.toFixed(4)}
-                            </span>
-                          ) : (
-                            <span className="text-slate-600">No GPS</span>
-                          )}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+
+                          <p className="text-black/40 text-xs font-mono">
+                            {p.id.slice(0, 8)}...
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+
+                    <td className="p-4 text-black/60 text-sm">
+                      <div className="flex items-center gap-2">
+                        <Phone className="h-3.5 w-3.5 text-black/35" />
+                        {p.phone_number || '—'}
+                      </div>
+                    </td>
+
+                    <td className="p-4">
+                      <p className="text-[#231815] font-semibold">
+                        {p.vehicle_registration || '—'}
+                      </p>
+
+                      <p className="text-black/40 text-xs">
+                        {p.vehicle_type || 'Standard Ambulance'}
+                      </p>
+                    </td>
+
+                    <td className="p-4">
+                      <span
+                        className={`px-3 py-1 rounded-full text-xs font-bold border ${
+                          p.is_online
+                            ? 'bg-green-100 border-green-200 text-green-700'
+                            : 'bg-red-100 border-red-200 text-red-600'
+                        }`}
+                      >
+                        {p.is_online ? 'Online' : 'Offline'}
+                      </span>
+                    </td>
+
+                    <td className="p-4">
+                      {p.rating ? (
+                        <span className="flex items-center gap-1 text-[#231815] font-bold">
+                          {Number(p.rating).toFixed(1)}
+                          <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
+                        </span>
+                      ) : (
+                        <span className="text-black/35 text-sm">
+                          No rating
+                        </span>
+                      )}
+                    </td>
+
+                    <td className="p-4 text-xs font-mono">
+                      {p.current_lat && p.current_lng ? (
+                        <span className="text-green-700 flex items-center gap-1">
+                          <MapPin className="h-3 w-3" />
+                          {p.current_lat.toFixed(4)}, {p.current_lng.toFixed(4)}
+                        </span>
+                      ) : (
+                        <span className="text-black/35">
+                          No GPS
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
