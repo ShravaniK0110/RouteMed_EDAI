@@ -40,7 +40,7 @@ export default function PatientAuth() {
           role: 'patient',
           name: data.full_name,
         }));
-        router.push('/patient/book');
+        router.push('/patient/home');
 
       } else {
         // Login: look up by phone number

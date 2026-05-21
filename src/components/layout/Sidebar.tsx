@@ -4,43 +4,54 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
 import {
-  LayoutDashboard,
+  Home,
+  BookOpen,
+  User as UserIcon,
   Truck,
   Building2,
   Ambulance,
   Users
 } from 'lucide-react'
 
-const adminLinks = [
-  {
-    name: 'Overview',
-    href: '/admin/dashboard',
-    icon: LayoutDashboard,
-  },
-  {
-    name: 'Paramedics',
-    href: '/admin/paramedics',
-    icon: Truck,
-  },
-  {
-    name: 'Hospitals',
-    href: '/admin/hospitals',
-    icon: Building2,
-  },
-  {
-    name: 'Rides',
-    href: '/admin/rides',
-    icon: Ambulance,
-  },
-  {
-    name: 'Users',
-    href: '/admin/users',
-    icon: Users,
-  },
-]
+interface NavItem {
+  name: string
+  href: string
+  icon: React.ElementType
+}
 
 export default function Sidebar() {
   const pathname = usePathname()
+
+  let roleTitle = ''
+  let roleTag = ''
+  let navItems: NavItem[] = []
+
+  if (pathname.startsWith('/patient')) {
+    roleTitle = 'Patient'
+    roleTag = 'Portal'
+    navItems = [
+      { name: 'Home', href: '/patient/home', icon: Home },
+      { name: 'Book Ambulance', href: '/patient/book', icon: BookOpen },
+      { name: 'Profile & Wallet', href: '/patient/profile', icon: UserIcon },
+    ]
+  } else if (pathname.startsWith('/paramedic')) {
+    roleTitle = 'Paramedic'
+    roleTag = 'Portal'
+    navItems = [
+      { name: 'Dashboard', href: '/paramedic/home', icon: Home },
+      { name: 'My Profile', href: '/paramedic/profile', icon: UserIcon },
+    ]
+  } else if (pathname.startsWith('/admin')) {
+    roleTitle = 'Admin'
+    roleTag = 'Control'
+    navItems = [
+      { name: 'Overview', href: '/admin/dashboard', icon: Home },
+      { name: 'Paramedics', href: '/admin/paramedics', icon: Truck },
+      { name: 'Hospitals', href: '/admin/hospitals', icon: Building2 },
+      { name: 'Rides', href: '/admin/rides', icon: Ambulance },
+      { name: 'Users', href: '/admin/users', icon: Users },
+    ]
+  }
 
   return (
     <aside className="w-64 min-h-screen bg-[#1f1a17] border-r border-white/10 text-white flex flex-col">
@@ -49,23 +60,19 @@ export default function Sidebar() {
           <div className="h-8 w-8 rounded-md bg-red-600 flex items-center justify-center text-xs font-black">
             RM
           </div>
-
           <div>
-            <h1 className="text-lg font-black tracking-tight">
-              RouteMed
-            </h1>
-
+            <h1 className="text-lg font-black tracking-tight">RouteMed</h1>
             <p className="text-[10px] text-white/40 mt-1 uppercase tracking-[0.22em]">
-              Admin Panel
+              {roleTitle} {roleTag}
             </p>
           </div>
         </div>
       </div>
 
       <nav className="flex-1 px-4 py-6 space-y-2">
-        {adminLinks.map((item) => {
+        {navItems.map((item) => {
           const Icon = item.icon
-          const active = pathname === item.href
+          const active = pathname === item.href || pathname.startsWith(item.href + '/')
 
           return (
             <Link
@@ -78,10 +85,7 @@ export default function Sidebar() {
               }`}
             >
               <Icon className="h-4 w-4" />
-
-              <span className="text-sm">
-                {item.name}
-              </span>
+              <span className="text-sm">{item.name}</span>
             </Link>
           )
         })}

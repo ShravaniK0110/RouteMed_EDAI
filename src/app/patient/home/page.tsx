@@ -8,7 +8,7 @@ import { MapPin, Clock, AlertTriangle } from 'lucide-react'
 const Map = dynamic<any>(() => import('@/components/Map'), { ssr: false })
 
 export default function PatientHome() {
-  const [userName] = useState('')
+  const [userName, setUserName] = useState('')
 
   const [patientLocation, setPatientLocation] = useState({
     lat: 18.5204,
@@ -18,6 +18,17 @@ export default function PatientHome() {
   const [locationName, setLocationName] = useState('Locating…')
 
   useEffect(() => {
+    // Load username from localStorage
+    try {
+      const userStr = localStorage.getItem('user')
+      if (userStr) {
+        const user = JSON.parse(userStr)
+        setUserName(user.full_name || user.name || '')
+      }
+    } catch {
+      // ignore parse errors
+    }
+    
     if (!navigator.geolocation) {
       setLocationName('Pune')
       return

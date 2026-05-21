@@ -522,7 +522,7 @@ export default function PatientBook() {
               <div className="relative">
                 <input
                   type="text"
-                  className="w-full border border-slate-200 rounded-lg p-2.5 text-sm pl-10 outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border border-slate-200 rounded-lg p-2.5 text-sm pl-10 text-black outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Search in Pune..."
                   value={addressInput}
                   onChange={
