@@ -285,11 +285,26 @@ await fetch('/api/paramedic/update-location', {
       <div className="h-52 rounded-2xl overflow-hidden border border-slate-700 relative">
         {coords ? (
           <Map
-            patientLat={targetLat}
-            patientLng={targetLng}
-            paramedicLat={coords.lat}
-            paramedicLng={coords.lng}
-          />
+  patientLat={Number(rideData.pickup_lat)}
+  patientLng={Number(rideData.pickup_lng)}
+  paramedicLat={coords.lat}
+  paramedicLng={coords.lng}
+  hospitalLat={
+    hospitalData?.latitude
+      ? Number(hospitalData.latitude)
+      : undefined
+  }
+  hospitalLng={
+    hospitalData?.longitude
+      ? Number(hospitalData.longitude)
+      : undefined
+  }
+  showRoute={true}
+  showHospital={missionPhase === 'dropoff'}
+  onRouteInfo={(info) => {
+    setEtaMinutes(info.etaMinutes)
+  }}
+/>
         ) : (
           <div className="h-full flex items-center justify-center bg-slate-900">
             <p className="text-slate-500 text-sm animate-pulse">Acquiring High-Res GPS...</p>

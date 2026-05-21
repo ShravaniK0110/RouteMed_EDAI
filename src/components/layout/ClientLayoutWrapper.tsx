@@ -1,16 +1,33 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
+
 import Sidebar from '@/components/layout/Sidebar'
 
-export default function ClientLayoutWrapper({ children }: { children: React.ReactNode }) {
+export default function ClientLayoutWrapper({
+  children,
+}: {
+  children: React.ReactNode
+}) {
   const pathname = usePathname()
-  const showSidebar = pathname.startsWith('/patient') || pathname.startsWith('/paramedic') || pathname.startsWith('/admin')
+
+  // ONLY show sidebar for admin routes
+  const showAdminSidebar =
+    pathname.startsWith('/admin')
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      {showSidebar && <Sidebar />}
-      <main className={`flex-1 overflow-y-auto ${showSidebar ? 'ml-64' : ''} p-8`}>
+    <div className="flex min-h-screen overflow-hidden">
+      {showAdminSidebar && (
+        <Sidebar />
+      )}
+
+      <main
+        className={`flex-1 overflow-y-auto p-8 ${
+          showAdminSidebar
+            ? 'ml-64'
+            : ''
+        }`}
+      >
         <div className="max-w-7xl mx-auto">
           {children}
         </div>
