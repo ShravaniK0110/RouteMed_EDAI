@@ -325,10 +325,6 @@ export default function PatientTrackingPage({
           <p className="text-4xl font-black text-white">
             ₹{estimatedFare}
           </p>
-
-          <p className="text-sm text-green-300 mt-2">
-            Payment recorded for demo
-          </p>
         </div>
 
         <p className="text-white/40 text-sm">
